@@ -319,6 +319,168 @@ uv run pytest tests/unit tests/integration</code></pre>
       </table>
       <p class="note">未実装の範囲は、Parquet、Zarr、DuckDB、DVC pipeline、MLflow、Optuna、OR-Tools、問題生成器、状態モデル、LLM adapter、モデル呼び出し、実験データ生成である。これらは仕様書のPhase 1以降で追加する。</p>
     </section>
+    </div>
+
+    <div class="tab-panel" id="phase1-panel" role="tabpanel" aria-labelledby="phase1-tab" hidden>
+      <nav aria-label="Phase 1目次">
+        <a href="#phase1-scope">1. 保存基盤の全体像</a>
+        <a href="#phase1-identifiers">2. 決定的ID</a>
+        <a href="#phase1-schema">3. Schema version</a>
+        <a href="#phase1-parquet">4. Parquet I/O</a>
+        <a href="#phase1-zarr">5. Zarr I/O</a>
+        <a href="#phase1-duckdb">6. DuckDB view</a>
+        <a href="#phase1-validation">7. データ検証</a>
+        <a href="#phase1-verification">8. テストと結果</a>
+      </nav>
+
+      <section id="phase1-scope">
+        <h2>1. Phase 1：保存基盤の全体像</h2>
+        <p>Phase 1では、Phase 0のPython 3.11、uv、src layout、Hydra、CLI、CIを維持し、その上にID生成、Parquet、Zarr、DuckDB、schema version、データ検証を追加した。問題実装やLLM呼び出しは含まず、小さなCPU fixtureだけで保存から問合せまで検証できる。</p>
+
+        <div class="flow" aria-label="Phase 1のデータフロー">
+          <div>canonical JSON<br><code>identifiers.py</code></div><span>→</span>
+          <div>Parquet / Zarr<br>version付き保存</div><span>→</span>
+          <div>validation<br>DuckDB view</div>
+        </div>
+
+        <div class="module-grid">
+          <article><h3><code>identifiers.py</code></h3><p>内容から決まる安定IDを生成する。</p></article>
+          <article><h3><code>schemas.py</code></h3><p>4 tableとversionの正本を持つ。</p></article>
+          <article><h3><code>parquet.py</code></h3><p>非破壊的なatomic writeを行う。</p></article>
+          <article><h3><code>zarr.py</code></h3><p>観測値、mask、indexを保存する。</p></article>
+          <article><h3><code>duckdb.py</code></h3><p>Parquetを直接SQL viewにする。</p></article>
+          <article><h3><code>validation.py</code></h3><p>単体・関連制約を一括検査する。</p></article>
+        </div>
+
+        <p>依存には<code>pyarrow</code>、<code>duckdb</code>、<code>zarr</code>、配列APIで直接使う<code>numpy</code>だけを追加した。OR-Tools、Optuna、MLflow、PyTorch、Transformers、LLM clientは追加していない。</p>
+      </section>
+
+      <section id="phase1-identifiers">
+        <h2>2. Canonical JSONによる決定的ID</h2>
+        <p><code>identifiers.py</code>は値をUTF-8のcanonical JSONへ変換し、SHA-256 digestの先頭24 hexadecimal文字、つまり96 bitを短い種別prefixと組み合わせる。Python組込みの<code>hash()</code>には、processごとのrandomizationがあるため使用しない。</p>
+
+        <table>
+          <thead><tr><th>Prefix</th><th>ID</th><th>入力</th></tr></thead>
+          <tbody>
+            <tr><td><code>ins_</code></td><td>instance ID</td><td>canonicalな問題定義</td></tr>
+            <tr><td><code>trl_</code></td><td>trial ID</td><td>instance ID、完全な実験条件、sampling seed</td></tr>
+            <tr><td><code>chk_</code></td><td>checkpoint ID</td><td>trial ID、生成token位置</td></tr>
+            <tr><td><code>art_</code></td><td>artifact ID</td><td>安定した内容記述</td></tr>
+            <tr><td><code>exp_</code></td><td>experiment ID</td><td>人間可読名、実験条件</td></tr>
+          </tbody>
+        </table>
+
+        <p>object keyはsortし、区切り文字から空白を除き、UnicodeはUTF-8のまま保持する。nested dict、list、finite floatを決定的に扱う。NaN、正負Infinity、非文字列object key、JSON化不能なobjectは、曖昧な変換をせず例外で拒否する。保存順やParquetの行番号はID生成に関与しない。</p>
+      </section>
+
+      <section id="phase1-schema">
+        <h2>3. PyArrow schemaとversion境界</h2>
+        <p>現行versionは<code>SCHEMA_VERSION = "1"</code>として<code>data/schemas.py</code>だけで定義する。instances、trials、checkpoints、metricsのPyArrow schemaは、仕様書の列名、型、nullable、列順をそのまま固定し、先頭にnon-nullの<code>schema_version</code>列を加える。</p>
+
+        <table>
+          <thead><tr><th>Table</th><th>主なキー</th><th>nullable列</th></tr></thead>
+          <tbody>
+            <tr><td>instances</td><td><code>instance_id</code></td><td>difficulty_value</td></tr>
+            <tr><td>trials</td><td><code>trial_id</code>、instance_id外部キー</td><td>llm_revision、error_type</td></tr>
+            <tr><td>checkpoints</td><td><code>checkpoint_id</code>、trial_id外部キー</td><td>state_json、objective_value、optimality_gap、tensor_ref</td></tr>
+            <tr><td>metrics</td><td>run・split・fold・horizon・metric名で識別</td><td>fold、horizon</td></tr>
+          </tbody>
+        </table>
+
+        <p>Parquet schema metadataには<code>logical_table</code>と<code>schema_version</code>を保存し、timestampは<code>timestamp[us, UTC]</code>とする。読込み時に列、型、nullable metadata、実値のnull、table metadata、versionを検査する。未知のtable名と未対応versionは専用の明確な例外で拒否し、暗黙のmigrationは行わない。</p>
+      </section>
+
+      <section id="phase1-parquet">
+        <h2>4. 安全なParquet I/O</h2>
+        <p>Parquetは表形式データの正本であり、既定圧縮はZstandardである。書込みAPIは受け取ったPyArrow tableを正本schemaに照合してから、次の順序で確定する。</p>
+
+        <div class="flow" aria-label="Parquet atomic writeの手順">
+          <div>schema検証</div><span>→</span>
+          <div>同じdirectoryの<br>一時fileへ書込み</div><span>→</span>
+          <div>read-back検証<br>atomic rename</div>
+        </div>
+
+        <p>一時fileが完全に読み戻せた場合だけ<code>os.replace()</code>で正式pathへ移す。既存fileがある場合は既定で<code>FileExistsError</code>となり、呼出側が<code>overwrite=True</code>を明示した場合だけ置換する。この既定動作により、rawデータを暗黙に破壊しない。空tableも完全なschemaとmetadataを保持したままround-tripできる。</p>
+      </section>
+
+      <section id="phase1-zarr">
+        <h2>5. Zarr v3による多次元観測</h2>
+        <p>Zarr 3.1.6をPython 3.11環境へlockし、format v3のgroup、配列属性、標準可変長UTF-8 indexのround-tripを実際に確認した。v3で必要なAPIを安定して使えたため採用し、判断をADR-004に記録した。</p>
+
+        <pre><code>observations.zarr/
+├── hidden/{values, valid_mask}
+├── attention_summary/{values, valid_mask}
+├── mlp_update/{values, valid_mask}
+├── kv_summary/{values, valid_mask}
+└── index/
+    ├── trial_id
+    ├── checkpoint_id
+    └── generated_token_index</code></pre>
+
+        <p>欠損はゼロ値だけで表現せず、valuesと同shapeのboolean <code>valid_mask</code>を必須にする。各配列はshape、axis names、dtypeをattributesに持ち、先頭軸は<code>checkpoint</code>でindex長と一致しなければならない。</p>
+        <p>root attributesにはschema version、Zarr format、writing/complete状態、model revision、tokenizer revision、observation code versionを保存する。書込みは一時storeを検証してから確定する。既存storeは明示的なoverwriteなしに破壊せず、置換時もbackupを介して失敗時に元storeを戻せるようにした。</p>
+      </section>
+
+      <section id="phase1-duckdb">
+        <h2>6. DuckDBを問合せ層に限定</h2>
+        <p>DuckDBは永続データベースを正本にせず、検証済みParquetを直接読むin-memory viewとして使う。pathはSQL文字列へ手作業で埋め込まず、DuckDBのrelation APIへ渡す。</p>
+
+        <pre><code>instances.instance_id = trials.instance_id
+trials.trial_id       = checkpoints.trial_id</code></pre>
+
+        <p><code>analysis_checkpoints</code>は上記IDによるinner joinで、各checkpointに問題条件とtrial条件を付加する。instance、trial、checkpointそれぞれのschema versionは別名にし、列名衝突を避ける。同じinstanceに複数trialがあってもtrial IDを通じて正しく展開される。</p>
+        <p>metricsは同名の独立viewとして参照できるが、checkpointとの不自然な多対多joinを避けるため代表viewには含めない。4つのParquetのいずれかが欠ける場合は、欠損file名を示して失敗する。</p>
+      </section>
+
+      <section id="phase1-validation">
+        <h2>7. 構造化されたデータ検証</h2>
+        <p><code>ValidationIssue</code>はseverity、code、message、tableまたはartifact、関連IDを持つ。検証は可能な限り続行し、発見した問題をまとめて返す。実データ本文や秘密値をmessageへ含めない。</p>
+
+        <div class="module-grid">
+          <article><h3>Table単体</h3><p>version、必須・余分な列、列順、型、nullable、null、主キー重複。</p></article>
+          <article><h3>Table間</h3><p>instance・trial外部キー、checkpoint IDとtrial内indexの一意性。</p></article>
+          <article><h3>意味制約</h3><p>token位置の逆行、split、trial status、successと終端分類の矛盾。</p></article>
+          <article><h3>Zarr対応</h3><p>checkpoint ID、trial ID、token位置の一致、重複・欠落。</p></article>
+          <article><h3>完了状態</h3><p>一時file、partial、backup、未完了Zarr storeを拒否。</p></article>
+          <article><h3>CLI</h3><p>最大50件を読みやすく表示し、errorがあれば非0終了。</p></article>
+        </div>
+
+        <pre><code>uv run lsd validate-data --data-dir /path/to/dataset
+uv run lsd validate-data --data-dir /path/to/empty --allow-empty</code></pre>
+
+        <p><code>--data-dir</code>未指定時はHydraの<code>storage.data_dir</code>をrepository rootから解決する。データがない状態は既定でerrorであり、構成確認などで空を許す場合だけ<code>--allow-empty</code>を明示する。storage設定にはraw、interim、derived、artifact、Parquet基準directory、Zarr store pathをrepository-relativeで定義した。</p>
+      </section>
+
+      <section id="phase1-verification">
+        <h2>8. テスト、CI、文書</h2>
+        <p>unit testはID、4 schema、Parquet、Zarr、validation、DuckDBを正常・異常fixtureで検証する。integration testはすべて<code>tmp_path</code>内で、次の流れをCPUだけで完走する。</p>
+
+        <pre><code>fixture作成
+  → 4 Parquet保存
+  → Zarr保存
+  → データ検証
+  → DuckDB view作成
+  → ID join確認
+  → CLI validate-data</code></pre>
+
+        <table>
+          <thead><tr><th>最終検証</th><th>結果</th></tr></thead>
+          <tbody>
+            <tr><td><code>uv lock --check</code></td><td class="ok">成功 — 26 packages</td></tr>
+            <tr><td><code>uv sync --all-extras --locked</code></td><td class="ok">成功</td></tr>
+            <tr><td><code>uv run ruff check .</code></td><td class="ok">成功</td></tr>
+            <tr><td><code>uv run ruff format --check .</code></td><td class="ok">成功 — 37 files</td></tr>
+            <tr><td><code>uv run pytest tests/unit tests/integration</code></td><td class="ok">成功 — 57 passed</td></tr>
+            <tr><td><code>uv run lsd doctor</code></td><td class="ok">成功</td></tr>
+            <tr><td><code>uv run lsd validate-repository</code></td><td class="ok">成功</td></tr>
+            <tr><td><code>lsd validate-data</code>（一時fixture）</td><td class="ok">成功、fixture削除済み</td></tr>
+          </tbody>
+        </table>
+
+        <p>README、architecture、data dictionary、ADR-004、ADR-005も実装に合わせて更新した。保存データは将来DVC管理対象になるが、Phase 1ではDVC pipelineを作らず、実データは引き続きGit対象外とする。</p>
+        <p class="note">Phase 2以降として残したものは、問題実装、軌道生成、状態モデル、力学モデル、OR-Tools、Optuna、MLflow、DVC pipeline、LLM adapter、モデル呼び出しである。Phase 1の保存・検証は外部API、GPU、LLMサーバーを必要としない。</p>
+      </section>
+    </div>
   </main>
 
   <footer>
@@ -326,5 +488,33 @@ uv run pytest tests/unit tests/integration</code></pre>
       Generated for the LLM Search Dynamics repository — 2026-09-12
     </div>
   </footer>
+  <script>
+    const tabs = Array.from(document.querySelectorAll('[role="tab"]'));
+    const panels = tabs.map((tab) => document.getElementById(tab.getAttribute('aria-controls')));
+
+    function activateTab(nextTab, moveFocus = true) {
+      tabs.forEach((tab, index) => {
+        const selected = tab === nextTab;
+        tab.setAttribute('aria-selected', String(selected));
+        tab.tabIndex = selected ? 0 : -1;
+        panels[index].hidden = !selected;
+      });
+      if (moveFocus) nextTab.focus();
+    }
+
+    tabs.forEach((tab, index) => {
+      tab.addEventListener('click', () => activateTab(tab, false));
+      tab.addEventListener('keydown', (event) => {
+        let nextIndex = index;
+        if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length;
+        else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + tabs.length) % tabs.length;
+        else if (event.key === 'Home') nextIndex = 0;
+        else if (event.key === 'End') nextIndex = tabs.length - 1;
+        else return;
+        event.preventDefault();
+        activateTab(tabs[nextIndex]);
+      });
+    });
+  </script>
 </body>
 </html>
