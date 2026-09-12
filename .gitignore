@@ -14,9 +14,9 @@ venv/
 !.env.example
 
 # Project artifacts
-artifacts/
-data/
-mlruns/
+/artifacts/
+/data/
+/mlruns/
 *.parquet
 *.zarr/
 

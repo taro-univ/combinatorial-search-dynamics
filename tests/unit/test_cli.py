@@ -33,3 +33,18 @@ def test_doctor_does_not_print_secret_values(monkeypatch) -> None:
 
     assert result.exit_code == 0, result.output
     assert secret not in result.output
+
+
+def test_validate_data_rejects_empty_directory_without_flag(tmp_path: Path) -> None:
+    result = CliRunner().invoke(app, ["validate-data", "--data-dir", str(tmp_path)])
+    assert result.exit_code == 1
+    assert "empty_dataset" in result.output
+
+
+def test_validate_data_allows_empty_directory_only_with_flag(tmp_path: Path) -> None:
+    result = CliRunner().invoke(
+        app,
+        ["validate-data", "--data-dir", str(tmp_path), "--allow-empty"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "allowed explicitly" in result.output

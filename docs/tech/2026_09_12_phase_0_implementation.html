@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LLM Search Dynamics — Phase 0 技術解説</title>
+  <title>LLM Search Dynamics — Phase 0・1 技術解説</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -116,6 +116,46 @@
     .flow span { text-align: center; color: var(--muted); font-weight: bold; }
     .ok { color: var(--success); font-weight: 700; }
     .note { border-left: 4px solid var(--accent); padding-left: 16px; color: var(--muted); }
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin: 0 0 24px;
+      padding: 6px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+    }
+    .tab-button {
+      flex: 1;
+      padding: 12px 18px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .tab-button[aria-selected="true"] {
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+    .tab-button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    .tab-panel[hidden] { display: none; }
+    .module-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+      margin: 20px 0;
+    }
+    .module-grid article {
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--accent-soft);
+    }
+    .module-grid h3 { margin: 0 0 6px; }
+    .module-grid p { margin: 0; }
     footer { padding: 16px 0 48px; color: var(--muted); font-size: 0.9rem; }
 
     @media (max-width: 720px) {
@@ -128,6 +168,8 @@
       body { background: white; }
       section, nav { break-inside: avoid; box-shadow: none; }
       a { color: inherit; text-decoration: none; }
+      .tabs { display: none; }
+      .tab-panel[hidden] { display: block; }
     }
   </style>
 </head>
@@ -135,11 +177,20 @@
   <header>
     <span class="tag">Technical Note</span>
     <span class="tag">Phase 0</span>
-    <h1>LLM Search Dynamics<br>初期骨格の技術解説</h1>
-    <p class="lead">リポジトリ仕様書を正本として、外部API、LLMサーバー、GPU、実験データを必要としない開発基盤を構築した。本文書は2026年9月12日時点の実装内容と、その設計上の理由を説明する。</p>
+    <span class="tag">Phase 1</span>
+    <h1>LLM Search Dynamics<br>初期構築の技術解説</h1>
+    <p class="lead">リポジトリ仕様書を正本として、外部API、LLMサーバー、GPUを必要としない開発・保存基盤を構築した。タブを切り替えると、Phaseごとの実装内容と設計理由を確認できる。</p>
   </header>
 
   <main>
+    <div class="tabs" role="tablist" aria-label="実装Phase">
+      <button class="tab-button" id="phase0-tab" type="button" role="tab"
+              aria-selected="true" aria-controls="phase0-panel">Phase 0：骨格</button>
+      <button class="tab-button" id="phase1-tab" type="button" role="tab"
+              aria-selected="false" aria-controls="phase1-panel" tabindex="-1">Phase 1：保存基盤</button>
+    </div>
+
+    <div class="tab-panel" id="phase0-panel" role="tabpanel" aria-labelledby="phase0-tab">
     <nav aria-label="目次">
       <a href="#scope">1. 実装範囲</a>
       <a href="#dependencies">2. 依存管理</a>
@@ -271,7 +322,9 @@ uv run pytest tests/unit tests/integration</code></pre>
   </main>
 
   <footer>
-    <main>Generated for the LLM Search Dynamics repository — 2026-09-12</main>
+    <div style="width: min(980px, calc(100% - 32px)); margin-inline: auto;">
+      Generated for the LLM Search Dynamics repository — 2026-09-12
+    </div>
   </footer>
 </body>
 </html>

@@ -1,6 +1,6 @@
 name: pilot
-phase: 0
-description: Phase 0 configuration-composition check; no experiment is run.
+phase: 1
+description: Phase 1 storage configuration check; no experiment is run.
 seed:
   instance_generation: 100
   llm_sampling: 200

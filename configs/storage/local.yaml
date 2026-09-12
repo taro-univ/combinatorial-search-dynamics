@@ -1,4 +1,9 @@
 mode: local
-implemented: false
-data_dir: data
+implemented: true
+data_dir: data/raw
+raw_data_dir: data/raw
+interim_data_dir: data/interim
+derived_data_dir: data/derived
 artifact_dir: artifacts
+parquet_dir: ${storage.raw_data_dir}
+zarr_store_path: ${storage.raw_data_dir}/observations.zarr

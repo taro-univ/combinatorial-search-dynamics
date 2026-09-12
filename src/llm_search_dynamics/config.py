@@ -1,4 +1,4 @@
-"""Hydra configuration loading and Phase 0 repository validation."""
+"""Hydra configuration loading and repository validation."""
 
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ def resolved_config(**kwargs: Any) -> dict[str, Any]:
 
 
 def validate_repository(root: Path | None = None) -> list[str]:
-    """Return Phase 0 validation errors; an empty list means success."""
+    """Return repository validation errors; an empty list means success."""
     target = (root or repository_root()).resolve()
     required_files = (
         "README.md",
@@ -69,15 +69,25 @@ def validate_repository(root: Path | None = None) -> list[str]:
         "docs/repository-specification.md",
         "docs/architecture.md",
         "docs/experiment-protocol.md",
+        "docs/data-dictionary.md",
         "docs/adr/README.md",
         "docs/adr/ADR-001-uv-and-python-311.md",
         "docs/adr/ADR-002-src-layout.md",
         "docs/adr/ADR-003-hydra-as-config-source.md",
+        "docs/adr/ADR-004-parquet-and-zarr-responsibilities.md",
+        "docs/adr/ADR-005-duckdb-query-layer.md",
         "scripts/bootstrap.sh",
         ".github/workflows/ci.yml",
         "src/llm_search_dynamics/__init__.py",
         "src/llm_search_dynamics/cli.py",
         "src/llm_search_dynamics/config.py",
+        "src/llm_search_dynamics/identifiers.py",
+        "src/llm_search_dynamics/data/__init__.py",
+        "src/llm_search_dynamics/data/schemas.py",
+        "src/llm_search_dynamics/data/parquet.py",
+        "src/llm_search_dynamics/data/zarr.py",
+        "src/llm_search_dynamics/data/duckdb.py",
+        "src/llm_search_dynamics/data/validation.py",
         "configs/config.yaml",
         "configs/experiment/pilot.yaml",
         "configs/task/placeholder.yaml",

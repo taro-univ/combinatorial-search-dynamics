@@ -12,6 +12,9 @@ def test_default_hydra_composition_succeeds() -> None:
 def test_resolved_config_contains_required_groups() -> None:
     config = resolved_config()
     assert set(CONFIG_GROUPS) <= config.keys()
+    assert config["storage"]["implemented"] is True
+    assert config["storage"]["parquet_dir"] == "data/raw"
+    assert config["storage"]["zarr_store_path"] == "data/raw/observations.zarr"
 
 
 def test_missing_config_file_fails_clearly(tmp_path: Path) -> None:
