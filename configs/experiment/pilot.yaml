@@ -1,0 +1,11 @@
+name: pilot
+phase: 0
+description: Phase 0 configuration-composition check; no experiment is run.
+seed:
+  instance_generation: 100
+  llm_sampling: 200
+  data_split: 300
+  representation: 400
+  dynamics: 500
+  optuna: 600
+  bootstrap: 700

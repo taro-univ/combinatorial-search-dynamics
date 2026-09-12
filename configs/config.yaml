@@ -1,0 +1,15 @@
+defaults:
+  - experiment: pilot
+  - task: placeholder
+  - llm: placeholder
+  - generation: default
+  - observation: external_only
+  - state_model: baseline
+  - dynamics: markov
+  - evaluation: default
+  - storage: local
+  - _self_
+
+hydra:
+  job:
+    chdir: false

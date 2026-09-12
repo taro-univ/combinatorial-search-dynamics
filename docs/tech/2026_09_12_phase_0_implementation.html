@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LLM Search Dynamics — Phase 0 技術解説</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f6f7f9;
+      --surface: #ffffff;
+      --text: #20242a;
+      --muted: #5f6975;
+      --border: #dfe3e8;
+      --accent: #2457a7;
+      --accent-soft: #eaf1fc;
+      --success: #176b42;
+      --code: #f1f3f5;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #15181c;
+        --surface: #1d2127;
+        --text: #ecf0f4;
+        --muted: #aab4bf;
+        --border: #343b44;
+        --accent: #8db9ff;
+        --accent-soft: #1d3558;
+        --success: #73d9a4;
+        --code: #252a31;
+      }
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.75;
+    }
+    main, header { width: min(980px, calc(100% - 32px)); margin-inline: auto; }
+    header { padding: 56px 0 30px; }
+    header p { color: var(--muted); max-width: 760px; }
+    h1 { margin: 0 0 12px; font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.15; }
+    h2 { margin-top: 0; font-size: 1.55rem; }
+    h3 { margin-top: 2rem; font-size: 1.12rem; }
+    a { color: var(--accent); }
+    code {
+      border-radius: 4px;
+      background: var(--code);
+      padding: 0.12em 0.36em;
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: 0.92em;
+    }
+    pre {
+      overflow-x: auto;
+      padding: 18px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--code);
+      line-height: 1.55;
+    }
+    pre code { padding: 0; background: transparent; }
+    section {
+      margin-bottom: 24px;
+      padding: clamp(22px, 4vw, 36px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+    }
+    nav {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 8px 20px;
+      margin: 20px 0 28px;
+      padding: 20px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+    }
+    nav a { text-decoration: none; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 12px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-size: 0.9rem; }
+    .lead { font-size: 1.08rem; }
+    .tag {
+      display: inline-block;
+      margin-right: 8px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 0.82rem;
+      font-weight: 650;
+    }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      align-items: center;
+      gap: 8px;
+      margin: 24px 0;
+    }
+    .flow div {
+      min-height: 72px;
+      display: grid;
+      place-items: center;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      text-align: center;
+      background: var(--accent-soft);
+    }
+    .flow span { text-align: center; color: var(--muted); font-weight: bold; }
+    .ok { color: var(--success); font-weight: 700; }
+    .note { border-left: 4px solid var(--accent); padding-left: 16px; color: var(--muted); }
+    footer { padding: 16px 0 48px; color: var(--muted); font-size: 0.9rem; }
+
+    @media (max-width: 720px) {
+      .flow { grid-template-columns: 1fr; }
+      .flow span { transform: rotate(90deg); }
+      table { display: block; overflow-x: auto; }
+    }
+    @media print {
+      :root { color-scheme: light; }
+      body { background: white; }
+      section, nav { break-inside: avoid; box-shadow: none; }
+      a { color: inherit; text-decoration: none; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="tag">Technical Note</span>
+    <span class="tag">Phase 0</span>
+    <h1>LLM Search Dynamics<br>初期骨格の技術解説</h1>
+    <p class="lead">リポジトリ仕様書を正本として、外部API、LLMサーバー、GPU、実験データを必要としない開発基盤を構築した。本文書は2026年9月12日時点の実装内容と、その設計上の理由を説明する。</p>
+  </header>
+
+  <main>
+    <nav aria-label="目次">
+      <a href="#scope">1. 実装範囲</a>
+      <a href="#dependencies">2. 依存管理</a>
+      <a href="#configuration">3. Hydra設定</a>
+      <a href="#cli">4. CLI</a>
+      <a href="#tests">5. テストとCI</a>
+      <a href="#documents">6. ADRと文書</a>
+      <a href="#security">7. 秘密情報</a>
+      <a href="#verification">8. 検証結果</a>
+    </nav>
+
+    <section id="scope">
+      <h2>1. 実装範囲と構成</h2>
+      <p>Phase 0の目的は研究処理を実装することではなく、その後のコードを安全に追加できる骨格を固定することである。今回の実装は、依存の再現、設定の合成、ローカル診断、自動テスト、設計判断の記録に限定した。</p>
+
+      <div class="flow" aria-label="Phase 0の処理構成">
+        <div><code>pyproject.toml<br>uv.lock</code></div><span>→</span>
+        <div><code>configs/</code><br>Hydra合成</div><span>→</span>
+        <div><code>config.py<br>cli.py</code></div>
+      </div>
+
+      <p><code>src/llm_search_dynamics</code>をPythonパッケージの配置先とするsrc layoutは維持した。将来の保存層、生成器、状態モデルなどは、実装のない空ディレクトリを作らず、必要になったPhaseで追加する。</p>
+    </section>
+
+    <section id="dependencies">
+      <h2>2. uvによる依存管理</h2>
+      <p><code>pyproject.toml</code>のPython範囲を<code>&gt;=3.11,&lt;3.12</code>とし、<code>.python-version</code>の<code>3.11</code>と一致させた。実行時依存はPhase 0で実際に使用するHydraとTyper、開発用extraはpytestとRuffである。</p>
+
+      <table>
+        <thead><tr><th>分類</th><th>依存</th><th>Phase 0での責務</th></tr></thead>
+        <tbody>
+          <tr><td>実行時</td><td><code>hydra-core</code></td><td>分類別YAMLの合成と解決</td></tr>
+          <tr><td>実行時</td><td><code>typer</code></td><td><code>lsd</code> CLIの提供</td></tr>
+          <tr><td>dev extra</td><td><code>pytest</code></td><td>unit・integration test</td></tr>
+          <tr><td>dev extra</td><td><code>ruff</code></td><td>lintとformat検査</td></tr>
+        </tbody>
+      </table>
+
+      <p>MLflow、Optuna、DuckDB、PyArrow、Zarr、OR-Toolsは、それぞれ後続Phaseの責務なので依存から外した。生成した<code>uv.lock</code>は直接依存と推移依存を固定する。ローカルのbootstrapとCIは、同じ同期コマンドを使用する。</p>
+      <pre><code>uv sync --all-extras --locked</code></pre>
+      <p><code>scripts/bootstrap.sh</code>はuvがなければ導入し、その後は上記コマンドだけで環境を再構築する。.env作成、pipによる二重管理、Codex CLIの自動導入は行わない。</p>
+    </section>
+
+    <section id="configuration">
+      <h2>3. Hydra設定の最小構成</h2>
+      <p><code>configs/config.yaml</code>は値を集約するファイルではなく、次の設定グループを合成する入口として実装した。</p>
+      <pre><code>experiment → pilot
+task → placeholder
+llm → placeholder
+generation → default
+observation → external_only
+state_model → baseline
+dynamics → markov
+evaluation → default
+storage → local</code></pre>
+      <p>研究条件は分類別YAMLに置く。未実装の機能は<code>implemented: false</code>で明示されるため、設定が存在することと実行機能が存在することを混同しない。seed、token上限、評価時のtest利用原則、保存先などもPythonコードではなくYAML側に置いた。</p>
+
+      <h3>設定API</h3>
+      <p><code>src/llm_search_dynamics/config.py</code>は三つの役割を持つ。</p>
+      <ol>
+        <li><code>compose_config()</code>がHydraのdefault compositionを実行する。</li>
+        <li><code>resolved_config()</code>が補間解決後の設定を通常のPython辞書として返す。</li>
+        <li><code>validate_repository()</code>が必要ファイル、Python指定、設定合成、必須グループを検証する。</li>
+      </ol>
+      <p>設定ディレクトリまたはroot YAMLが存在しない場合は、対象pathを含む<code>FileNotFoundError</code>で失敗する。Hydraの構文・合成エラーもrepository validationの診断結果へ変換する。</p>
+    </section>
+
+    <section id="cli">
+      <h2>4. CLIの責務</h2>
+      <h3><code>lsd doctor</code></h3>
+      <p>実行中のPythonが3.11か、uvがPATH上にあるか、Phase 0のファイルとHydra設定が正しいかを検査する。.envや環境変数を読み取らず、API key、LLMサーバー、GPU、DVC remoteを成功条件に含めない。</p>
+
+      <h3><code>lsd validate-repository</code></h3>
+      <p>Phase 0で実在すべき構成と、解決済みHydra設定の全必須グループを検証する。実験データのschema検証とは責務を分けた。</p>
+
+      <h3><code>lsd validate-data</code></h3>
+      <p>既存コマンドとの互換性のために残したaliasである。Phase 0ではデータ検証が未実装であることを表示してから、repository validationを実行する。実データ検証はPhase 1でこの名前本来の責務として実装する。</p>
+
+      <h3>Codex CLI</h3>
+      <p><code>lsd codex</code>と<code>scripts/run_codex.sh</code>は開発補助用であり、研究対象LLMのadapterではない。bootstrapやCIから切り離し、研究環境の成立条件に含めていない。</p>
+    </section>
+
+    <section id="tests">
+      <h2>5. テストとCPU CI</h2>
+      <p>unit testでは、パッケージversion、repository root、.env形式の空行・コメント・引用符、秘密値の非表示、Hydra composition、必須設定グループ、設定欠落時の明確な失敗、repository validationを検査する。</p>
+      <p>integration testはCLIから<code>validate-repository</code>を呼び出す。mock LLMすら必要とせず、ネットワーク、GPU、大容量データ、DVC remoteなしで完了する。</p>
+      <p><code>.github/workflows/ci.yml</code>はUbuntu上でPython 3.11とuvをセットアップし、次の順序で実行する。</p>
+      <pre><code>uv sync --all-extras --locked
+uv run ruff check .
+uv run ruff format --check .
+uv run pytest tests/unit tests/integration</code></pre>
+    </section>
+
+    <section id="documents">
+      <h2>6. ADRと研究文書</h2>
+      <p>ADR templateと、Phase 0で決定した三件のADRを追加した。</p>
+      <ul>
+        <li>ADR-001: uvとPython 3.11</li>
+        <li>ADR-002: src layout</li>
+        <li>ADR-003: Hydraを設定の正本とする</li>
+      </ul>
+      <p><code>docs/architecture.md</code>は現在のコンポーネント境界を説明する。<code>docs/experiment-protocol.md</code>は研究質問、仮説、評価単位、データ分割、主要指標を実験前に記入する雛形であり、testデータを構成固定後の最終評価まで使用しない原則を含む。</p>
+      <p>READMEも現在実行できる操作に合わせた。pilot設定はcomposition確認用であり、pilot実験やデータ取得はまだ実行できないことを明記している。</p>
+    </section>
+
+    <section id="security">
+      <h2>7. 秘密情報の扱い</h2>
+      <p>Hydra YAMLにはcredential用の値や環境変数展開を置いていない。<code>.env.example</code>にも秘密値を含めず、Phase 0では秘密情報が不要であることだけを記載した。</p>
+      <p><code>.env</code>は<code>.gitignore</code>の対象であり、今回の作業では内容を表示・変更・Git追加していない。doctorも.envを読まないため、診断出力へ秘密値が混入しない。この性質は環境変数へテスト用secretを設定し、出力に現れないことをunit testで確認している。</p>
+    </section>
+
+    <section id="verification">
+      <h2>8. 実行した検証</h2>
+      <table>
+        <thead><tr><th>コマンド</th><th>結果</th></tr></thead>
+        <tbody>
+          <tr><td><code>uv sync --all-extras</code></td><td class="ok">成功</td></tr>
+          <tr><td><code>uv lock --check</code></td><td class="ok">成功 — 18 packages</td></tr>
+          <tr><td><code>uv run ruff check .</code></td><td class="ok">成功</td></tr>
+          <tr><td><code>uv run ruff format --check .</code></td><td class="ok">成功 — 16 files</td></tr>
+          <tr><td><code>uv run pytest tests/unit tests/integration</code></td><td class="ok">成功 — 9 passed</td></tr>
+          <tr><td><code>uv run lsd doctor</code></td><td class="ok">成功 — Python 3.11、uv、構成、Hydra</td></tr>
+          <tr><td><code>uv run lsd validate-repository</code></td><td class="ok">成功</td></tr>
+          <tr><td><code>uv run lsd validate-data</code></td><td class="ok">互換aliasとして成功</td></tr>
+        </tbody>
+      </table>
+      <p class="note">未実装の範囲は、Parquet、Zarr、DuckDB、DVC pipeline、MLflow、Optuna、OR-Tools、問題生成器、状態モデル、LLM adapter、モデル呼び出し、実験データ生成である。これらは仕様書のPhase 1以降で追加する。</p>
+    </section>
+  </main>
+
+  <footer>
+    <main>Generated for the LLM Search Dynamics repository — 2026-09-12</main>
+  </footer>
+</body>
+</html>
