@@ -1,0 +1,4 @@
+name: mock_generator
+revision: "1"
+implemented: true
+is_llm_adapter: false

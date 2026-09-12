@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -11,6 +13,7 @@ import typer
 from llm_search_dynamics.config import repository_root, resolved_config, validate_repository
 from llm_search_dynamics.data.schemas import TABLE_NAMES
 from llm_search_dynamics.data.validation import validate_dataset
+from llm_search_dynamics.pipeline.stages import STAGE_NAMES, PilotPaths, reproduce_pilot, run_stage
 
 app = typer.Typer(help="LLM Search Dynamics CLI")
 
@@ -144,6 +147,74 @@ def validate_data(
     if len(result.issues) > len(displayed):
         typer.echo(f"... {len(result.issues) - len(displayed)} additional issue(s)", err=True)
     raise typer.Exit(code=1)
+
+
+_PILOT_CONTEXT = {"allow_extra_args": True, "ignore_unknown_options": True}
+
+
+def _run_pilot_command(
+    stage: str, ctx: typer.Context, *, force: bool, full_pipeline: bool = False
+) -> None:
+    """Compose Hydra overrides and run a CPU-only pilot stage."""
+    try:
+        overrides = list(ctx.args)
+        if any("=" not in item for item in overrides):
+            raise ValueError("Hydra overrides must be of the form group.key=value")
+        config = resolved_config(overrides=overrides)
+        if full_pipeline:
+            results = reproduce_pilot(config, force=force)
+        else:
+            results = {stage: run_stage(stage, config, force=force)}
+        for completed, outputs in results.items():
+            typer.echo(f"{completed}: {', '.join(str(path) for path in outputs)}")
+    except Exception as exc:
+        # Error artifacts contain only the error class and stage, never env/config values.
+        try:
+            if "config" in locals():
+                path = PilotPaths.from_config(config).artifacts / "errors" / f"{stage}.json"
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(
+                    json.dumps(
+                        {
+                            "stage": stage,
+                            "error_type": type(exc).__name__,
+                            "recorded_at": datetime.now(UTC).isoformat(),
+                        },
+                        indent=2,
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+        except (OSError, ValueError, KeyError):
+            pass
+        typer.echo(f"{stage} failed ({type(exc).__name__}): {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+
+def _stage_command(stage: str):
+    def command(
+        ctx: typer.Context,
+        force: Annotated[
+            bool, typer.Option("--force", help="Replace this stage's outputs")
+        ] = False,
+    ) -> None:
+        _run_pilot_command(stage, ctx, force=force)
+
+    command.__doc__ = f"Run the {stage} CPU pilot stage using Hydra overrides."
+    return command
+
+
+for _stage_name in STAGE_NAMES:
+    app.command(name=_stage_name, context_settings=_PILOT_CONTEXT)(_stage_command(_stage_name))
+
+
+@app.command("reproduce-pilot", context_settings=_PILOT_CONTEXT)
+def reproduce_pilot_command(
+    ctx: typer.Context,
+    force: Annotated[bool, typer.Option("--force", help="Replace all pilot outputs")] = False,
+) -> None:
+    """Run all eight Phase 2 stages in-process without an LLM or GPU."""
+    _run_pilot_command("reproduce-pilot", ctx, force=force, full_pipeline=True)
 
 
 def main() -> None:

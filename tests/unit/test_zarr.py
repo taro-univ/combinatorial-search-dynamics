@@ -79,6 +79,14 @@ def test_incomplete_store_is_rejected(tmp_path) -> None:
         read_observation_store(path)
 
 
+def test_missing_internal_group_is_not_mistaken_for_external_only(tmp_path) -> None:
+    path = tmp_path / "observations.zarr"
+    _write(path)
+    del zarr.open_group(path, mode="a")["hidden"]
+    with pytest.raises(ZarrValidationError, match="all four Phase 1 groups"):
+        read_observation_store(path)
+
+
 def test_implicit_store_overwrite_is_rejected(tmp_path) -> None:
     path = tmp_path / "observations.zarr"
     _write(path)

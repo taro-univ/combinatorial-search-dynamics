@@ -1,0 +1,349 @@
+schema: '2.0'
+stages:
+  generate_instances:
+    cmd: uv run lsd generate-instances --force
+    deps:
+    - path: configs/config.yaml
+      hash: md5
+      md5: 236d965b1c5955483a39394597f3d6fb
+      size: 274
+    - path: configs/experiment/pilot.yaml
+      hash: md5
+      md5: f722e6abca446d653f5194fd5f504788
+      size: 263
+    - path: configs/storage/local.yaml
+      hash: md5
+      md5: 88c8b9bfab6f045e50608205b597777a
+      size: 293
+    - path: configs/task/dummy_binary.yaml
+      hash: md5
+      md5: 09e85366397ae9a620c5a00e3a9be895
+      size: 63
+    - path: src/llm_search_dynamics/identifiers.py
+      hash: md5
+      md5: 005b980db0c72b6594ac05d90c2b94df
+      size: 3904
+    - path: src/llm_search_dynamics/pipeline/stages.py
+      hash: md5
+      md5: bc8fe28d84eb69f30645c72301153e96
+      size: 25288
+    - path: src/llm_search_dynamics/tasks/dummy_binary.py
+      hash: md5
+      md5: 8796f73444cfff3c10f78f3abecf158d
+      size: 5230
+    - path: src/llm_search_dynamics/tasks/registry.py
+      hash: md5
+      md5: b13974bacb0894bd4890c9b6bc263746
+      size: 444
+    outs:
+    - path: data/raw/pilot/instances.parquet
+      hash: md5
+      md5: c6d672a03dd00c11b8fda432bd085d20
+      size: 3834
+  collect_trajectories:
+    cmd: uv run lsd collect --force
+    deps:
+    - path: configs/experiment/pilot.yaml
+      hash: md5
+      md5: f722e6abca446d653f5194fd5f504788
+      size: 263
+    - path: configs/generation/mock.yaml
+      hash: md5
+      md5: 0c205199a27e08dad20af65b57dce1c1
+      size: 183
+    - path: configs/llm/mock.yaml
+      hash: md5
+      md5: 29c73aa6e0f9de457c08e8e0f59e50ac
+      size: 75
+    - path: configs/observation/external_only.yaml
+      hash: md5
+      md5: 23bfcc62983b9042b253b58004bf30fa
+      size: 56
+    - path: configs/storage/local.yaml
+      hash: md5
+      md5: 88c8b9bfab6f045e50608205b597777a
+      size: 293
+    - path: configs/task/dummy_binary.yaml
+      hash: md5
+      md5: 09e85366397ae9a620c5a00e3a9be895
+      size: 63
+    - path: data/raw/pilot/instances.parquet
+      hash: md5
+      md5: c6d672a03dd00c11b8fda432bd085d20
+      size: 3834
+    - path: src/llm_search_dynamics/data/zarr.py
+      hash: md5
+      md5: 4a8267d9845145bc472a738e4142ffbb
+      size: 12975
+    - path: src/llm_search_dynamics/generation/mock.py
+      hash: md5
+      md5: 13f56da8e02d327ce69919e4ed94c97c
+      size: 4333
+    outs:
+    - path: data/raw/pilot/checkpoints.parquet
+      hash: md5
+      md5: ec7eac8042d1d335b0a48d8a82bdfa09
+      size: 6612
+    - path: data/raw/pilot/metrics.parquet
+      hash: md5
+      md5: 4f97b2dd5e8bcfe035202e6e2e6b8dbb
+      size: 1677
+    - path: data/raw/pilot/observations.zarr
+      hash: md5
+      md5: 01940dc57f1e9711e035c8bca9ec9254.dir
+      size: 6202
+      nfiles: 15
+    - path: data/raw/pilot/trials.parquet
+      hash: md5
+      md5: f3f0068574fae8892596a36176d81027
+      size: 5217
+  prepare_trajectories:
+    cmd: uv run lsd prepare --force
+    deps:
+    - path: data/raw/pilot/checkpoints.parquet
+      hash: md5
+      md5: ec7eac8042d1d335b0a48d8a82bdfa09
+      size: 6612
+    - path: data/raw/pilot/instances.parquet
+      hash: md5
+      md5: c6d672a03dd00c11b8fda432bd085d20
+      size: 3834
+    - path: data/raw/pilot/metrics.parquet
+      hash: md5
+      md5: 4f97b2dd5e8bcfe035202e6e2e6b8dbb
+      size: 1677
+    - path: data/raw/pilot/observations.zarr
+      hash: md5
+      md5: 01940dc57f1e9711e035c8bca9ec9254.dir
+      size: 6202
+      nfiles: 15
+    - path: data/raw/pilot/trials.parquet
+      hash: md5
+      md5: f3f0068574fae8892596a36176d81027
+      size: 5217
+    - path: src/llm_search_dynamics/data/validation.py
+      hash: md5
+      md5: fcc529189f1840da87ea663b8a092d5a
+      size: 13047
+    outs:
+    - path: data/interim/pilot/trajectories.json
+      hash: md5
+      md5: fbd80f95a5b82ad8246b2c483fa1262d
+      size: 52003
+  extract_features:
+    cmd: uv run lsd extract --force
+    deps:
+    - path: configs/observation/external_only.yaml
+      hash: md5
+      md5: 23bfcc62983b9042b253b58004bf30fa
+      size: 56
+    - path: data/interim/pilot/trajectories.json
+      hash: md5
+      md5: fbd80f95a5b82ad8246b2c483fa1262d
+      size: 52003
+    - path: src/llm_search_dynamics/features/external.py
+      hash: md5
+      md5: ec6a96463b6fca19e6f697b628eba27f
+      size: 1503
+    outs:
+    - path: data/derived/pilot/features.json
+      hash: md5
+      md5: 7def1e123003864a7495987e22db0d6b
+      size: 26499
+  make_splits:
+    cmd: uv run lsd split --force
+    deps:
+    - path: configs/evaluation/default.yaml
+      hash: md5
+      md5: 0f2000200279c4e69f75738695f6f535
+      size: 203
+    - path: configs/experiment/pilot.yaml
+      hash: md5
+      md5: f722e6abca446d653f5194fd5f504788
+      size: 263
+    - path: data/derived/pilot/features.json
+      hash: md5
+      md5: 7def1e123003864a7495987e22db0d6b
+      size: 26499
+    - path: data/raw/pilot/instances.parquet
+      hash: md5
+      md5: c6d672a03dd00c11b8fda432bd085d20
+      size: 3834
+    - path: src/llm_search_dynamics/data/splits.py
+      hash: md5
+      md5: e0263afc940f46e305698d88bfc89be8
+      size: 5128
+    outs:
+    - path: data/derived/pilot/splits.json
+      hash: md5
+      md5: b2c112ce95c612f57d25a204bbcfedd3
+      size: 632
+  fit_model:
+    cmd: uv run lsd fit --force
+    deps:
+    - path: configs/dynamics/markov.yaml
+      hash: md5
+      md5: e13efe8355ef2a41390555b7365845f8
+      size: 59
+    - path: configs/state_model/baseline.yaml
+      hash: md5
+      md5: 608eeb3066924938ffb9f4d9b3bac5d7
+      size: 54
+    - path: data/derived/pilot/features.json
+      hash: md5
+      md5: 7def1e123003864a7495987e22db0d6b
+      size: 26499
+    - path: data/derived/pilot/splits.json
+      hash: md5
+      md5: b2c112ce95c612f57d25a204bbcfedd3
+      size: 632
+    - path: src/llm_search_dynamics/dynamics/transition.py
+      hash: md5
+      md5: 5d425c4f6af8e205aaebb97630a7c51e
+      size: 5831
+    - path: src/llm_search_dynamics/state_models/baseline.py
+      hash: md5
+      md5: 871aea8ac078680fd6e7c14fd5aa34f9
+      size: 4038
+    outs:
+    - path: artifacts/pilot/dynamics_model.json
+      hash: md5
+      md5: 6c15f6fb70347588d4f7c775e3ec37e9
+      size: 1779
+    - path: artifacts/pilot/state_model.json
+      hash: md5
+      md5: 6aef8c38258811338bbf0af3f5a946e0
+      size: 444
+    - path: data/derived/pilot/state_assignments.json
+      hash: md5
+      md5: 85025f805a67f80883232f46fdb465d4
+      size: 28799
+  evaluate_model:
+    cmd: uv run lsd evaluate --force
+    deps:
+    - path: artifacts/pilot/dynamics_model.json
+      hash: md5
+      md5: 6c15f6fb70347588d4f7c775e3ec37e9
+      size: 1779
+    - path: artifacts/pilot/state_model.json
+      hash: md5
+      md5: 6aef8c38258811338bbf0af3f5a946e0
+      size: 444
+    - path: configs/evaluation/default.yaml
+      hash: md5
+      md5: 0f2000200279c4e69f75738695f6f535
+      size: 203
+    - path: configs/tracking/local.yaml
+      hash: md5
+      md5: 5c549b131824d0c8dc7c0f149bd8735d
+      size: 96
+    - path: data/derived/pilot/splits.json
+      hash: md5
+      md5: b2c112ce95c612f57d25a204bbcfedd3
+      size: 632
+    - path: data/derived/pilot/state_assignments.json
+      hash: md5
+      md5: 85025f805a67f80883232f46fdb465d4
+      size: 28799
+    - path: data/raw/pilot/checkpoints.parquet
+      hash: md5
+      md5: ec7eac8042d1d335b0a48d8a82bdfa09
+      size: 6612
+    - path: data/raw/pilot/instances.parquet
+      hash: md5
+      md5: c6d672a03dd00c11b8fda432bd085d20
+      size: 3834
+    - path: data/raw/pilot/metrics.parquet
+      hash: md5
+      md5: 4f97b2dd5e8bcfe035202e6e2e6b8dbb
+      size: 1677
+    - path: data/raw/pilot/observations.zarr
+      hash: md5
+      md5: 01940dc57f1e9711e035c8bca9ec9254.dir
+      size: 6202
+      nfiles: 15
+    - path: data/raw/pilot/trials.parquet
+      hash: md5
+      md5: f3f0068574fae8892596a36176d81027
+      size: 5217
+    - path: src/llm_search_dynamics/evaluation/metrics.py
+      hash: md5
+      md5: 87fc97f1cf4893939dd027c1c3355eb1
+      size: 2827
+    - path: src/llm_search_dynamics/provenance.py
+      hash: md5
+      md5: 55f64e7aa8aff4911e3cde321437efbc
+      size: 3615
+    - path: src/llm_search_dynamics/tracking/mlflow.py
+      hash: md5
+      md5: 61c648918c9ca759ee485adb302d4c06
+      size: 3061
+    outs:
+    - path: artifacts/pilot/provenance.json
+      hash: md5
+      md5: 5980f8c02f2489d85963270e01d8c73f
+      size: 3215
+    - path: artifacts/pilot/resolved_config.json
+      hash: md5
+      md5: c6cc2a04c771af9d63bbdb012018e0b8
+      size: 1901
+    - path: artifacts/pilot/run.json
+      hash: md5
+      md5: 59cbacef8f7d552d747c428f32cc3482
+      size: 136
+    - path: artifacts/pilot/validation.json
+      hash: md5
+      md5: 97c64b0c0a401071d7cf58345cd81d93
+      size: 56
+    - path: data/derived/pilot/evaluation_summary.json
+      hash: md5
+      md5: 9a794a7b9bc5380d38f67615b8cf0a4c
+      size: 323
+    - path: data/derived/pilot/metrics.parquet
+      hash: md5
+      md5: 1e65ee0736da4c746092bd5390bc2418
+      size: 2851
+    - path: data/derived/pilot/predictions.json
+      hash: md5
+      md5: 25da0fc03f8e37ad0f40345ab4d28b6b
+      size: 6420
+  build_report:
+    cmd: uv run lsd report --force
+    deps:
+    - path: artifacts/pilot/run.json
+      hash: md5
+      md5: 59cbacef8f7d552d747c428f32cc3482
+      size: 136
+    - path: data/derived/pilot/evaluation_summary.json
+      hash: md5
+      md5: 9a794a7b9bc5380d38f67615b8cf0a4c
+      size: 323
+    - path: data/derived/pilot/splits.json
+      hash: md5
+      md5: b2c112ce95c612f57d25a204bbcfedd3
+      size: 632
+    - path: data/raw/pilot/checkpoints.parquet
+      hash: md5
+      md5: ec7eac8042d1d335b0a48d8a82bdfa09
+      size: 6612
+    - path: data/raw/pilot/instances.parquet
+      hash: md5
+      md5: c6d672a03dd00c11b8fda432bd085d20
+      size: 3834
+    - path: data/raw/pilot/trials.parquet
+      hash: md5
+      md5: f3f0068574fae8892596a36176d81027
+      size: 5217
+    - path: src/llm_search_dynamics/reporting/tables.py
+      hash: md5
+      md5: cf9bac2fd4a130a8f2a94df0e76ea7fd
+      size: 3202
+    outs:
+    - path: artifacts/pilot/report.md
+      hash: md5
+      md5: 12b7b8f56be3f91b06d10895a3aafe5b
+      size: 1284
+    - path: artifacts/pilot/summary.csv
+      hash: md5
+      md5: 8103418d7ad2ad47059cb4212fbd8e18
+      size: 519

@@ -1,2 +1,3 @@
-name: baseline
-implemented: false
+name: hamming_distance
+version: "1"
+implemented: true

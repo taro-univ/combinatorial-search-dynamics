@@ -1,2 +1,4 @@
 name: markov
-implemented: false
+version: "1"
+implemented: true
+smoothing: 0.5

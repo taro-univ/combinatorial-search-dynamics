@@ -1,0 +1,111 @@
+stages:
+  generate_instances:
+    cmd: uv run lsd generate-instances --force
+    deps:
+      - configs/config.yaml
+      - configs/experiment/pilot.yaml
+      - configs/task/dummy_binary.yaml
+      - configs/storage/local.yaml
+      - src/llm_search_dynamics/tasks/dummy_binary.py
+      - src/llm_search_dynamics/tasks/registry.py
+      - src/llm_search_dynamics/identifiers.py
+      - src/llm_search_dynamics/pipeline/stages.py
+    outs:
+      - data/raw/pilot/instances.parquet
+  collect_trajectories:
+    cmd: uv run lsd collect --force
+    deps:
+      - data/raw/pilot/instances.parquet
+      - configs/generation/mock.yaml
+      - configs/llm/mock.yaml
+      - configs/observation/external_only.yaml
+      - configs/experiment/pilot.yaml
+      - configs/task/dummy_binary.yaml
+      - configs/storage/local.yaml
+      - src/llm_search_dynamics/generation/mock.py
+      - src/llm_search_dynamics/data/zarr.py
+    outs:
+      - data/raw/pilot/trials.parquet
+      - data/raw/pilot/checkpoints.parquet
+      - data/raw/pilot/observations.zarr
+      - data/raw/pilot/metrics.parquet
+  prepare_trajectories:
+    cmd: uv run lsd prepare --force
+    deps:
+      - data/raw/pilot/instances.parquet
+      - data/raw/pilot/trials.parquet
+      - data/raw/pilot/checkpoints.parquet
+      - data/raw/pilot/observations.zarr
+      - data/raw/pilot/metrics.parquet
+      - src/llm_search_dynamics/data/validation.py
+    outs:
+      - data/interim/pilot/trajectories.json
+  extract_features:
+    cmd: uv run lsd extract --force
+    deps:
+      - data/interim/pilot/trajectories.json
+      - configs/observation/external_only.yaml
+      - src/llm_search_dynamics/features/external.py
+    outs:
+      - data/derived/pilot/features.json
+  make_splits:
+    cmd: uv run lsd split --force
+    deps:
+      - data/derived/pilot/features.json
+      - data/raw/pilot/instances.parquet
+      - configs/experiment/pilot.yaml
+      - configs/evaluation/default.yaml
+      - src/llm_search_dynamics/data/splits.py
+    outs:
+      - data/derived/pilot/splits.json
+  fit_model:
+    cmd: uv run lsd fit --force
+    deps:
+      - data/derived/pilot/features.json
+      - data/derived/pilot/splits.json
+      - configs/state_model/baseline.yaml
+      - configs/dynamics/markov.yaml
+      - src/llm_search_dynamics/state_models/baseline.py
+      - src/llm_search_dynamics/dynamics/transition.py
+    outs:
+      - artifacts/pilot/state_model.json
+      - artifacts/pilot/dynamics_model.json
+      - data/derived/pilot/state_assignments.json
+  evaluate_model:
+    cmd: uv run lsd evaluate --force
+    deps:
+      - data/derived/pilot/state_assignments.json
+      - data/derived/pilot/splits.json
+      - artifacts/pilot/state_model.json
+      - artifacts/pilot/dynamics_model.json
+      - data/raw/pilot/instances.parquet
+      - data/raw/pilot/trials.parquet
+      - data/raw/pilot/checkpoints.parquet
+      - data/raw/pilot/observations.zarr
+      - data/raw/pilot/metrics.parquet
+      - configs/evaluation/default.yaml
+      - configs/tracking/local.yaml
+      - src/llm_search_dynamics/evaluation/metrics.py
+      - src/llm_search_dynamics/provenance.py
+      - src/llm_search_dynamics/tracking/mlflow.py
+    outs:
+      - data/derived/pilot/metrics.parquet
+      - data/derived/pilot/predictions.json
+      - data/derived/pilot/evaluation_summary.json
+      - artifacts/pilot/provenance.json
+      - artifacts/pilot/resolved_config.json
+      - artifacts/pilot/validation.json
+      - artifacts/pilot/run.json
+  build_report:
+    cmd: uv run lsd report --force
+    deps:
+      - data/derived/pilot/evaluation_summary.json
+      - data/derived/pilot/splits.json
+      - data/raw/pilot/instances.parquet
+      - data/raw/pilot/trials.parquet
+      - data/raw/pilot/checkpoints.parquet
+      - artifacts/pilot/run.json
+      - src/llm_search_dynamics/reporting/tables.py
+    outs:
+      - artifacts/pilot/report.md
+      - artifacts/pilot/summary.csv

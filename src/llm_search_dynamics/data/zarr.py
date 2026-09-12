@@ -15,6 +15,8 @@ from llm_search_dynamics.data.schemas import SCHEMA_VERSION, UnsupportedSchemaVe
 
 ZARR_FORMAT = 3
 OBSERVATION_GROUPS = ("hidden", "attention_summary", "mlp_update", "kv_summary")
+EXTERNAL_OBSERVATION_GROUP = "external_state"
+SUPPORTED_OBSERVATION_GROUPS = (*OBSERVATION_GROUPS, EXTERNAL_OBSERVATION_GROUP)
 
 
 class ZarrValidationError(ValueError):
@@ -37,6 +39,7 @@ class ObservationStore:
     model_revision: str | None
     tokenizer_revision: str | None
     observation_code_version: str
+    observation_metadata: dict[str, str]
 
 
 def _chunks(shape: tuple[int, ...]) -> tuple[int, ...]:
@@ -49,11 +52,18 @@ def _validate_inputs(
     checkpoint_ids: list[str] | tuple[str, ...],
     generated_token_indices: list[int] | tuple[int, ...] | np.ndarray,
 ) -> None:
-    missing = set(OBSERVATION_GROUPS) - observations.keys()
-    extra = observations.keys() - set(OBSERVATION_GROUPS)
-    if missing or extra:
+    if not observations:
+        raise ZarrValidationError("At least one observation group is required")
+    extra = observations.keys() - set(SUPPORTED_OBSERVATION_GROUPS)
+    if extra:
+        raise ZarrValidationError(f"Unsupported observation groups: {', '.join(sorted(extra))}")
+    if (
+        set(observations) != {EXTERNAL_OBSERVATION_GROUP}
+        and not set(OBSERVATION_GROUPS) <= observations.keys()
+    ):
         raise ZarrValidationError(
-            f"Observation groups must be exactly {', '.join(OBSERVATION_GROUPS)}"
+            "Internal observations require all four Phase 1 groups; "
+            "external-only stores require external_state"
         )
 
     count = len(trial_ids)
@@ -117,6 +127,7 @@ def write_observation_store(
     observation_code_version: str,
     model_revision: str | None = None,
     tokenizer_revision: str | None = None,
+    observation_metadata: dict[str, str] | None = None,
     overwrite: bool = False,
 ) -> None:
     """Write a complete Zarr v3 store through a validated temporary directory."""
@@ -141,11 +152,11 @@ def write_observation_store(
                 "model_revision": model_revision,
                 "tokenizer_revision": tokenizer_revision,
                 "observation_code_version": observation_code_version,
+                "observation_metadata": observation_metadata or {},
             }
         )
 
-        for name in OBSERVATION_GROUPS:
-            observation = observations[name]
+        for name, observation in observations.items():
             values = np.asarray(observation.values)
             mask = np.asarray(observation.valid_mask)
             group = root.create_group(name)
@@ -259,10 +270,15 @@ def read_observation_store(path: Path) -> ObservationStore:
 
     observations: dict[str, ObservationArray] = {}
     structural_issues: list[str] = []
-    for name in OBSERVATION_GROUPS:
-        if name not in root:
-            structural_issues.append(f"Missing observation group: {name}")
-            continue
+    observation_names = sorted(name for name in root.group_keys() if name != "index")
+    if not observation_names:
+        structural_issues.append("No observation groups are present")
+    unsupported = set(observation_names) - set(SUPPORTED_OBSERVATION_GROUPS)
+    if unsupported:
+        structural_issues.append(
+            f"Unsupported observation groups: {', '.join(sorted(unsupported))}"
+        )
+    for name in observation_names:
         group = root[name]
         if "values" not in group or "valid_mask" not in group:
             structural_issues.append(f"{name} must contain values and valid_mask")
@@ -293,4 +309,7 @@ def read_observation_store(path: Path) -> ObservationStore:
         model_revision=attrs.get("model_revision"),
         tokenizer_revision=attrs.get("tokenizer_revision"),
         observation_code_version=str(attrs.get("observation_code_version", "")),
+        observation_metadata={
+            str(key): str(value) for key, value in attrs.get("observation_metadata", {}).items()
+        },
     )

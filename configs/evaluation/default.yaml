@@ -1,4 +1,11 @@
 name: default
-implemented: false
+implemented: true
 split_unit: instance_id
 test_final_evaluation_only: true
+split_version: "1"
+split_ratios:
+  train: 0.6
+  validation: 0.2
+  test: 0.2
+horizon: 1
+probability_floor: 1.0e-12

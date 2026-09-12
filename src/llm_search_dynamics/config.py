@@ -20,6 +20,7 @@ CONFIG_GROUPS = (
     "dynamics",
     "evaluation",
     "storage",
+    "tracking",
 )
 
 
@@ -76,6 +77,9 @@ def validate_repository(root: Path | None = None) -> list[str]:
         "docs/adr/ADR-003-hydra-as-config-source.md",
         "docs/adr/ADR-004-parquet-and-zarr-responsibilities.md",
         "docs/adr/ADR-005-duckdb-query-layer.md",
+        "docs/adr/ADR-006-git-dvc-mlflow-responsibilities.md",
+        "dvc.yaml",
+        ".dvcignore",
         "scripts/bootstrap.sh",
         ".github/workflows/ci.yml",
         "src/llm_search_dynamics/__init__.py",
@@ -98,6 +102,10 @@ def validate_repository(root: Path | None = None) -> list[str]:
         "configs/dynamics/markov.yaml",
         "configs/evaluation/default.yaml",
         "configs/storage/local.yaml",
+        "configs/tracking/local.yaml",
+        "configs/task/dummy_binary.yaml",
+        "configs/llm/mock.yaml",
+        "configs/generation/mock.yaml",
     )
     errors = [
         f"missing required file: {path}" for path in required_files if not (target / path).is_file()

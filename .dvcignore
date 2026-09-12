@@ -1,3 +1,10 @@
-# Add patterns of files dvc should ignore, which could improve
-# the performance. Learn more at
-# https://dvc.org/doc/user-guide/dvcignore
+# Ephemeral files are never completed pipeline outputs.
+*.tmp
+*.partial
+*.backup
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.venv/
+mlruns/
+artifacts/pilot/errors/

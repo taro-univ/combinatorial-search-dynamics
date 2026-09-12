@@ -1,6 +1,7 @@
 name: pilot
-phase: 1
-description: Phase 1 storage configuration check; no experiment is run.
+phase: 2
+description: Deterministic CPU-only pipeline validation; not a research experiment.
+instance_count: 9
 seed:
   instance_generation: 100
   llm_sampling: 200

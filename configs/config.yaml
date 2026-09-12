@@ -1,13 +1,14 @@
 defaults:
   - experiment: pilot
-  - task: placeholder
-  - llm: placeholder
-  - generation: default
+  - task: dummy_binary
+  - llm: mock
+  - generation: mock
   - observation: external_only
   - state_model: baseline
   - dynamics: markov
   - evaluation: default
   - storage: local
+  - tracking: local
   - _self_
 
 hydra:

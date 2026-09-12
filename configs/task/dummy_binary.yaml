@@ -1,0 +1,4 @@
+name: dummy_binary
+version: "1"
+implemented: true
+bit_count: 6
