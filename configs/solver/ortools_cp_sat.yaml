@@ -1,0 +1,7 @@
+name: ortools_cp_sat
+implemented: true
+max_time_seconds: 5.0
+num_search_workers: 1
+random_seed: 3001
+relative_gap_epsilon: 1.0e-9
+log_search_progress: false

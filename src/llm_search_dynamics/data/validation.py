@@ -367,4 +367,8 @@ def validate_dataset(data_dir: Path, *, allow_empty: bool = False) -> Validation
         _validate_checkpoint_order(tables["checkpoints"], issues)
     _validate_enums_and_status(tables, issues)
     _validate_zarr(directory, tables.get("checkpoints"), issues)
+    if "instances" in tables:
+        from llm_search_dynamics.data.reference_validation import validate_knapsack_dataset
+
+        validate_knapsack_dataset(directory, tables, issues)
     return ValidationResult(tuple(issues))

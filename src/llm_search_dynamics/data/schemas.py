@@ -91,9 +91,34 @@ _SCHEMAS = {
             pa.field("n_units", pa.int64(), nullable=False),
         ],
     ),
+    "reference_solutions": _schema(
+        "reference_solutions",
+        [
+            pa.field("reference_id", pa.string(), nullable=False),
+            pa.field("instance_id", pa.string(), nullable=False),
+            pa.field("task_name", pa.string(), nullable=False),
+            pa.field("task_version", pa.string(), nullable=False),
+            pa.field("solver_name", pa.string(), nullable=False),
+            pa.field("solver_version", pa.string(), nullable=False),
+            pa.field("solver_status", pa.string(), nullable=False),
+            pa.field("best_feasible_value", pa.float64(), nullable=True),
+            pa.field("best_bound", pa.float64(), nullable=True),
+            pa.field("optimal_value", pa.float64(), nullable=True),
+            pa.field("optimality_gap", pa.float64(), nullable=True),
+            pa.field("optimality_proven", pa.bool_(), nullable=False),
+            pa.field("timed_out", pa.bool_(), nullable=False),
+            pa.field("runtime_seconds", pa.float64(), nullable=False),
+            pa.field("solution_json", pa.string(), nullable=True),
+            pa.field("solver_parameters_json", pa.string(), nullable=False),
+            pa.field("solve_seed", pa.int64(), nullable=False),
+            pa.field("error_type", pa.string(), nullable=True),
+            pa.field("created_at", pa.timestamp("us", tz="UTC"), nullable=False),
+        ],
+    ),
 }
 
-TABLE_NAMES = tuple(_SCHEMAS)
+TABLE_NAMES = ("instances", "trials", "checkpoints", "metrics")
+OPTIONAL_TABLE_NAMES = ("reference_solutions",)
 
 
 def get_schema(table_name: str) -> pa.Schema:

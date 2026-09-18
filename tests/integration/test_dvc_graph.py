@@ -1,4 +1,4 @@
-"""Static checks for the local Phase 2 DVC graph."""
+"""Static checks for the local Phase 3 DVC graph."""
 
 from __future__ import annotations
 
@@ -9,10 +9,10 @@ from llm_search_dynamics.config import repository_root
 
 def test_dvc_graph_is_local_acyclic_and_stage_complete() -> None:
     root = repository_root()
-    definition = yaml.safe_load((root / "dvc.yaml").read_text(encoding="utf-8"))
-    stages = definition["stages"]
+    stages = yaml.safe_load((root / "dvc.yaml").read_text(encoding="utf-8"))["stages"]
     assert list(stages) == [
         "generate_instances",
+        "solve_references",
         "collect_trajectories",
         "prepare_trajectories",
         "extract_features",

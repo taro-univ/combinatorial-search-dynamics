@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LLM Search Dynamics — Phase 0・1 技術解説</title>
+  <title>LLM Search Dynamics — Phase 0・1・3 技術解説</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -178,6 +178,7 @@
     <span class="tag">Technical Note</span>
     <span class="tag">Phase 0</span>
     <span class="tag">Phase 1</span>
+    <span class="tag">Phase 3</span>
     <h1>LLM Search Dynamics<br>初期構築の技術解説</h1>
     <p class="lead">リポジトリ仕様書を正本として、外部API、LLMサーバー、GPUを必要としない開発・保存基盤を構築した。タブを切り替えると、Phaseごとの実装内容と設計理由を確認できる。</p>
   </header>
@@ -188,6 +189,8 @@
               aria-selected="true" aria-controls="phase0-panel">Phase 0：骨格</button>
       <button class="tab-button" id="phase1-tab" type="button" role="tab"
               aria-selected="false" aria-controls="phase1-panel" tabindex="-1">Phase 1：保存基盤</button>
+      <button class="tab-button" id="phase3-tab" type="button" role="tab"
+              aria-selected="false" aria-controls="phase3-panel" tabindex="-1">Phase 3：OR-Toolsと実問題</button>
     </div>
 
     <div class="tab-panel" id="phase0-panel" role="tabpanel" aria-labelledby="phase0-tab">
@@ -481,11 +484,162 @@ uv run lsd validate-data --data-dir /path/to/empty --allow-empty</code></pre>
         <p class="note">Phase 2以降として残したものは、問題実装、軌道生成、状態モデル、力学モデル、OR-Tools、Optuna、MLflow、DVC pipeline、LLM adapter、モデル呼び出しである。Phase 1の保存・検証は外部API、GPU、LLMサーバーを必要としない。</p>
       </section>
     </div>
+
+    <div class="tab-panel" id="phase3-panel" role="tabpanel" aria-labelledby="phase3-tab" hidden>
+      <nav aria-label="Phase 3目次">
+        <a href="#phase3-scope">1. 実問題pipeline</a>
+        <a href="#phase3-task">2. ナップサックTask</a>
+        <a href="#phase3-solver">3. OR-Tools solver</a>
+        <a href="#phase3-reference">4. 参照解と検証</a>
+        <a href="#phase3-model">5. 状態・評価</a>
+        <a href="#phase3-pipeline">6. DVCとMLflow</a>
+        <a href="#phase3-compatibility">7. 互換性と安全性</a>
+        <a href="#phase3-verification">8. 検証結果</a>
+      </nav>
+
+      <section id="phase3-scope">
+        <h2>1. Phase 3：実問題pipelineの全体像</h2>
+        <p>Phase 3では、Phase 1の保存・検証APIとPhase 2のCPU pipelineを維持し、最初の実問題として0-1ナップサックを追加した。OR-Tools CP-SATは参照解を求めるsolver、mock generatorは探索軌道を作る生成器として分離し、外部API、LLM、GPU、DVC remoteを使わずに完走する。</p>
+
+        <div class="flow" aria-label="Phase 3の処理構成">
+          <div>knapsack<br>instance生成</div><span>→</span>
+          <div>CP-SAT参照解<br>mock探索</div><span>→</span>
+          <div>gap状態・Markov<br>held-out評価</div>
+        </div>
+
+        <div class="module-grid">
+          <article><h3><code>tasks/knapsack.py</code></h3><p>決定的instance、合法toggle、feasibilityを定義する。</p></article>
+          <article><h3><code>solvers/</code></h3><p>solver中立の結果型とCP-SAT adapterを持つ。</p></article>
+          <article><h3><code>data/references.py</code></h3><p>参照結果の安定IDとcanonical rowを作る。</p></article>
+          <article><h3><code>reference_validation.py</code></h3><p>solver解、checkpoint、gapを再検証する。</p></article>
+          <article><h3><code>objective_gap.py</code></h3><p>証明済みoptimal値から離散状態を作る。</p></article>
+          <article><h3><code>pipeline/stages.py</code></h3><p>solve-referencesを既存stage間へ統合する。</p></article>
+        </div>
+      </section>
+
+      <section id="phase3-task">
+        <h2>2. 0-1ナップサックTaskと目的方向の一般化</h2>
+        <p>instanceは正整数のweights・values、正のcapacity、item count、generation seed、task名とversionを持つ。同じseedとHydra設定から同じinstance内容と<code>instance_id</code>を再生成する。capacityはweight合計より小さくし、既定生成で全itemが自動的に入る自明な問題を避ける。</p>
+
+        <table>
+          <thead><tr><th>要素</th><th>定義</th><th>防御的検査</th></tr></thead>
+          <tbody>
+            <tr><td>State</td><td>0/1選択vector、total weight/value、step</td><td>vector長、0/1、再計算した合計との一致</td></tr>
+            <tr><td>Action</td><td>item indexのtoggle</td><td>範囲外とcapacity超過の追加を拒否</td></tr>
+            <tr><td>Objective</td><td>選択itemのtotal valueを最大化</td><td>元stateを破壊せずfloatで返す</td></tr>
+            <tr><td>Terminal</td><td>証明済みoptimal到達、またはstep上限</td><td>参照値なしでoptimalと断定しない</td></tr>
+          </tbody>
+        </table>
+
+        <p>Phase 2のdummyはHamming距離の最小化、knapsackは価値の最大化である。この差をgenerator内の条件分岐へ埋め込まず、Task Protocolへ<code>objective_sense</code>、<code>is_better</code>、<code>objective_gap</code>、参照値付き<code>is_success</code>、<code>deserialize_state</code>を追加した。mock generatorのgreedy選択はTaskの比較規則を使うため、両方向で同じ実装を再利用できる。</p>
+      </section>
+
+      <section id="phase3-solver">
+        <h2>3. OR-Tools CP-SAT参照solver</h2>
+        <p>solver境界はimmutableな<code>SolverResult</code>で、OR-Tools固有型をpipelineへ漏らさない。状態はOPTIMAL、FEASIBLE、INFEASIBLE、MODEL_INVALID、UNKNOWN、ERRORへ正規化する。未知のsolver名はregistryで明確に失敗する。</p>
+
+        <pre><code>maximize  Σ value[i] * x[i]
+subject to Σ weight[i] * x[i] ≤ capacity
+           x[i] ∈ {0, 1}</code></pre>
+
+        <p>既定parameterは<code>max_time_seconds=5.0</code>、<code>num_search_workers=1</code>、<code>random_seed=3001</code>、<code>relative_gap_epsilon=1e-9</code>である。single workerはpilotの再現性を優先する判断である。返却されたsolution vectorはTask adapterへ戻し、capacity、目的値、solverのObjectiveValueが一致することを独立に検査する。</p>
+
+        <table>
+          <thead><tr><th>値</th><th>保存規則</th></tr></thead>
+          <tbody>
+            <tr><td>best feasible value</td><td>実行可能解が得られた場合に保存</td></tr>
+            <tr><td>best bound</td><td>最大化問題の最適値に対する上界</td></tr>
+            <tr><td>optimal value</td><td>statusがOPTIMALの場合だけ保存</td></tr>
+            <tr><td>timed out</td><td>非最適statusと明示的な時間制限到達規則から判定</td></tr>
+            <tr><td>error</td><td>削除せずERROR行と短いerror typeを保存</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="phase3-reference">
+        <h2>4. 参照解schema、gap、feasible check</h2>
+        <p><code>reference_solutions.parquet</code>はPhase 1の4必須tableを壊さない任意拡張tableである。schema versionは既存の<code>1</code>を維持し、logical table metadata、UTC timestamp、canonical JSONのsolution・parametersを保存する。Zstandard、atomic write、暗黙上書き拒否はPhase 1のParquet APIを再利用する。</p>
+
+        <pre><code>reference_id = hash(instance_id, solver name/version, parameters, solve seed)
+solver gap  = max(0, best_bound - best_feasible) / max(abs(best_feasible), epsilon)
+checkpoint gap = max(0, optimal - current_value) / max(abs(optimal), epsilon)</code></pre>
+
+        <p>solver gapはbest feasibleとboundの差、checkpoint gapは証明済みoptimal値と現在価値の差であり、意味を分離する。実行可能解がなければsolver gapはnull、optimalityが証明されなければcheckpoint gapもnullである。数値誤差で負になるgapは0へ切り上げる。</p>
+
+        <p>validationは参照ID、複合キー、instance外部キー、status・timeout・optimality proven・optimal valueの整合、solution feasibility、目的値再計算、bound方向を検査する。checkpointについてはstate vector、total weight/value、capacity、step、1 actionごとの遷移、目的値、gap、success終端を検査する。同じinstanceへ異なる参照条件が混在する曖昧なsnapshotも拒否する。</p>
+      </section>
+
+      <section id="phase3-model">
+        <h2>5. Objective-gap状態とheld-out評価</h2>
+        <p>Phase 2のHamming距離modelはdummy用として維持し、knapsackには証明済みoptimal値に対する相対gapの離散modelを追加した。bin境界はHydraで事前固定し、state 0をoptimal到達の吸収状態とする。欠損gapを0へ置換しない。</p>
+
+        <div class="module-grid">
+          <article><h3>Leakage防止</h3><p>fitはtrainの証明済みinstanceだけ。split hashとinstance IDをartifactへ保存する。</p></article>
+          <article><h3>Markov再利用</h3><p>0以上の連続state IDへ変換し、既存の一次Markovモデルを使う。</p></article>
+          <article><h3>予測指標</h3><p>one-step NLL、accuracy、success-state Brier scoreをtest transitionで算出する。</p></article>
+          <article><h3>問題指標</h3><p>success率、最終価値・gap、best-so-far、到達step、feasible率を集計する。</p></article>
+          <article><h3>Solver指標</h3><p>status件数、timeout率、optimality proven率、runtimeを別単位で記録する。</p></article>
+          <article><h3>母数</h3><p>trial、instance、checkpoint、transitionをn_unitsで区別する。</p></article>
+        </div>
+
+        <p>timeoutや未証明instanceはsolver率の母数から削除しない。一方、真のoptimal gapは証明済み参照だけで計算する。test instance IDがstate modelまたはdynamics modelのfit metadataに現れた場合は、評価を開始せず失敗する。</p>
+      </section>
+
+      <section id="phase3-pipeline">
+        <h2>6. Hydra、DVC、MLflowの統合</h2>
+        <p>Hydraへ<code>task=knapsack</code>、<code>solver=ortools_cp_sat</code>、<code>experiment=knapsack_pilot</code>、<code>state_model=objective_gap</code>を追加した。科学条件、solver parameter、pathをYAMLへ置き、credentialは保存しない。</p>
+
+        <pre><code>generate_instances
+  → solve_references
+  → collect_trajectories
+  → prepare_trajectories
+  → extract_features
+  → make_splits
+  → fit_model
+  → evaluate_model
+  → build_report</code></pre>
+
+        <p>ルートの<code>dvc.yaml</code>がPhase 3の正規graphである。solver設定だけを変更するとinstance生成をskipし、solve-referencesと参照依存stageを再計算する。変更がなければ2回目の<code>dvc repro</code>は全9 stageをskipする。Phase 2 dummyは独立DVC graphを増やさず、Hydra override付きCLIと回帰テストで維持する。</p>
+
+        <p>MLflow local file storeにはsolver名/version、status集計、参照設定hashをtagとして、問題生成条件とsolver条件をparameterとして記録する。参照表、solver設定、status集計、feasible check、model、metrics、report、provenanceをartifactとして保存するが、MLflowだけを正本にはしない。</p>
+      </section>
+
+      <section id="phase3-compatibility">
+        <h2>7. 後方互換性とデータ安全性</h2>
+        <p>Phase 1のinstances、trials、checkpoints、metricsとschema versionを変更せず、参照表をoptional registryへ追加した。dummy datasetは参照表なしで従来どおり検証でき、knapsack datasetだけが参照表を要求する。DuckDBの<code>analysis_checkpoints</code>も既存ID joinのまま利用する。</p>
+
+        <p>raw、reference、model、reportは既存出力を暗黙に上書きしない。CLIの<code>--force</code>またはDVCが管理する再計算だけが置換を許す。生成物は<code>data/</code>、<code>artifacts/</code>、<code>mlruns/</code>、DVC cacheへ置き、Git対象にしない。ルートにPhase名だけの管理用directoryは追加しない。</p>
+
+        <p class="note">OR-Toolsは参照solverであり探索generatorではない。mock generatorへsolverのsolutionやaction列を渡さず、参照値はsuccess、gap、評価だけに使う。LLM adapter、prompt versioning、内部状態取得、Optuna、nested CV、本評価はPhase 4以降に残す。</p>
+      </section>
+
+      <section id="phase3-verification">
+        <h2>8. テストと最終検証</h2>
+        <p>unit testはTask、目的方向、CP-SAT最適解、status変換、gap、参照schema、状態modelを検証する。integration testは<code>tmp_path</code>内でinstance生成からOR-Tools、mock軌道、Phase 1保存・検証、split、fit、held-out評価、MLflow、report、DuckDBまで完走する。regression testは非決定なruntime、timestamp、run IDを除外し、ID、optimal値、状態、遷移行列、主要metricを固定する。</p>
+
+        <table>
+          <thead><tr><th>最終検証</th><th>結果</th></tr></thead>
+          <tbody>
+            <tr><td><code>uv lock --check</code></td><td class="ok">成功 — 171 packages</td></tr>
+            <tr><td><code>uv sync --all-extras --locked</code></td><td class="ok">成功</td></tr>
+            <tr><td><code>uv run ruff check .</code></td><td class="ok">成功</td></tr>
+            <tr><td><code>uv run ruff format --check .</code></td><td class="ok">成功 — 85 files</td></tr>
+            <tr><td><code>uv run pytest tests/unit tests/integration tests/regression</code></td><td class="ok">成功 — 77 passed</td></tr>
+            <tr><td><code>uv run lsd doctor</code></td><td class="ok">成功</td></tr>
+            <tr><td><code>uv run lsd validate-repository</code></td><td class="ok">成功</td></tr>
+            <tr><td><code>uv run lsd validate-data</code>（knapsack snapshot）</td><td class="ok">成功</td></tr>
+            <tr><td><code>uv run dvc repro</code> 2回目</td><td class="ok">全9 stageをskip</td></tr>
+          </tbody>
+        </table>
+
+        <p>solver設定変更の再計算境界ではgenerate-instancesがskipされ、solve-references以降の参照依存stageだけが再評価された。Phase 2 dummy pipelineも隔離pathのCLIと既存regression testで成功した。API key、LLM server、GPU、MLflow server、DVC remoteは使用していない。</p>
+      </section>
+    </div>
   </main>
 
   <footer>
     <div style="width: min(980px, calc(100% - 32px)); margin-inline: auto;">
-      Generated for the LLM Search Dynamics repository — 2026-09-12
+      Generated for the LLM Search Dynamics repository — updated 2026-09-18
     </div>
   </footer>
   <script>

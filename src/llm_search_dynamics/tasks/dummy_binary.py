@@ -42,6 +42,7 @@ class DummyBinaryTask:
 
     name = "dummy_binary"
     version = "1"
+    objective_sense = "minimize"
 
     def __init__(self, *, bit_count: int, max_steps: int) -> None:
         if bit_count <= 0:
@@ -87,14 +88,26 @@ class DummyBinaryTask:
             return False
         return True
 
-    def is_terminal(self, state: BinaryState) -> bool:
-        return self.objective(state) == 0 or state.step >= state.max_steps
+    def is_terminal(self, state: BinaryState, reference_value: float | None = None) -> bool:
+        return self.is_success(state, reference_value) or state.step >= state.max_steps
 
     def objective(self, state: BinaryState) -> float:
         self._validate_state(state)
         return float(
             sum(left != right for left, right in zip(state.bits, state.target_bits, strict=True))
         )
+
+    def is_better(self, candidate: float, incumbent: float) -> bool:
+        return candidate < incumbent - 1e-9
+
+    def objective_gap(self, value: float, reference: float, *, epsilon: float = 1e-9) -> float:
+        if epsilon <= 0:
+            raise ValueError("epsilon must be positive")
+        return max(0.0, value - reference) / max(abs(reference), epsilon)
+
+    def is_success(self, state: BinaryState, reference_value: float | None = None) -> bool:
+        del reference_value
+        return abs(self.objective(state)) <= 1e-9
 
     def serialize_state(self, state: BinaryState) -> dict[str, Any]:
         self._validate_state(state)

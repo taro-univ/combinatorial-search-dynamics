@@ -17,6 +17,12 @@ from llm_search_dynamics.pipeline.stages import PilotPaths, reproduce_pilot
 def test_default_seed_state_transition_metric_and_report_shape(tmp_path: Path) -> None:
     config = resolved_config(
         overrides=[
+            "experiment=pilot",
+            "task=dummy_binary",
+            "solver=none",
+            "state_model=baseline",
+            "storage=local",
+            "tracking=local",
             f"storage.raw_data_dir={tmp_path / 'raw'}",
             f"storage.interim_data_dir={tmp_path / 'interim'}",
             f"storage.derived_data_dir={tmp_path / 'derived'}",

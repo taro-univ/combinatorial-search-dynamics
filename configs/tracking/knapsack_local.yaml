@@ -1,0 +1,3 @@
+implemented: true
+tracking_uri: file:./mlruns
+experiment_name: llm-search-dynamics-phase3-knapsack-pilot

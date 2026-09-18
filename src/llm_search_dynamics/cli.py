@@ -4,6 +4,7 @@ import json
 import shutil
 import subprocess
 import sys
+from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
@@ -11,6 +12,7 @@ from typing import Annotated
 import typer
 
 from llm_search_dynamics.config import repository_root, resolved_config, validate_repository
+from llm_search_dynamics.data.parquet import read_parquet
 from llm_search_dynamics.data.schemas import TABLE_NAMES
 from llm_search_dynamics.data.validation import validate_dataset
 from llm_search_dynamics.pipeline.stages import STAGE_NAMES, PilotPaths, reproduce_pilot, run_stage
@@ -167,6 +169,17 @@ def _run_pilot_command(
             results = {stage: run_stage(stage, config, force=force)}
         for completed, outputs in results.items():
             typer.echo(f"{completed}: {', '.join(str(path) for path in outputs)}")
+            if completed == "solve-references":
+                paths = PilotPaths.from_config(config)
+                statuses = Counter(
+                    row["solver_status"]
+                    for row in read_parquet(paths.reference, "reference_solutions").to_pylist()
+                )
+                typer.echo(
+                    f"  input={paths.raw / 'instances.parquet'}; "
+                    + "statuses="
+                    + ", ".join(f"{name}:{count}" for name, count in sorted(statuses.items()))
+                )
     except Exception as exc:
         # Error artifacts contain only the error class and stage, never env/config values.
         try:
@@ -213,7 +226,7 @@ def reproduce_pilot_command(
     ctx: typer.Context,
     force: Annotated[bool, typer.Option("--force", help="Replace all pilot outputs")] = False,
 ) -> None:
-    """Run all eight Phase 2 stages in-process without an LLM or GPU."""
+    """Run the configured Phase 2 or 3 pilot in-process without an LLM or GPU."""
     _run_pilot_command("reproduce-pilot", ctx, force=force, full_pipeline=True)
 
 

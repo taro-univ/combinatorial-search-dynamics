@@ -1,0 +1,10 @@
+mode: local
+implemented: true
+data_dir: ${storage.raw_data_dir}
+raw_data_dir: data/raw/knapsack_pilot
+interim_data_dir: data/interim/knapsack_pilot
+derived_data_dir: data/derived/knapsack_pilot
+artifact_dir: artifacts/knapsack_pilot
+parquet_dir: ${storage.raw_data_dir}
+zarr_store_path: ${storage.raw_data_dir}/observations.zarr
+reference_table_path: ${storage.raw_data_dir}/reference_solutions.parquet

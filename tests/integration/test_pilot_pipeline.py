@@ -21,6 +21,12 @@ from llm_search_dynamics.pipeline.stages import PilotPaths, reproduce_pilot
 
 def _overrides(directory: Path) -> list[str]:
     return [
+        "experiment=pilot",
+        "task=dummy_binary",
+        "solver=none",
+        "state_model=baseline",
+        "storage=local",
+        "tracking=local",
         "experiment.instance_count=9",
         "task.bit_count=6",
         "generation.trials=2",

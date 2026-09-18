@@ -7,3 +7,4 @@ derived_data_dir: data/derived/pilot
 artifact_dir: artifacts/pilot
 parquet_dir: ${storage.raw_data_dir}
 zarr_store_path: ${storage.raw_data_dir}/observations.zarr
+reference_table_path: null

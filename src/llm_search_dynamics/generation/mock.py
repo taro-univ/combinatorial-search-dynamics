@@ -13,6 +13,11 @@ GENERATOR_NAME = "mock_binary_search"
 GENERATOR_REVISION = "1"
 
 
+def generator_name(task_name: str) -> str:
+    """Keep the Phase 2 name stable while identifying the knapsack mock clearly."""
+    return GENERATOR_NAME if task_name == "dummy_binary" else f"mock_{task_name}_search"
+
+
 @dataclass(frozen=True)
 class GeneratedCheckpoint:
     checkpoint_id: str
@@ -54,6 +59,7 @@ class MockGenerator:
         source_instance_id: str,
         experiment_conditions: dict[str, object],
         sampling_seed: int,
+        reference_value: float | None = None,
     ) -> GeneratedTrial:
         rng = random.Random(sampling_seed)
         identifier = trial_id(source_instance_id, experiment_conditions, sampling_seed)
@@ -72,14 +78,18 @@ class MockGenerator:
                     state=state,
                     objective=task.objective(state),
                     remaining_budget=max(0, self.max_steps - position),
-                    is_terminal=task.is_terminal(state) or position >= self.max_steps,
+                    is_terminal=task.is_terminal(state, reference_value)
+                    or position >= self.max_steps,
                     action=action,
                 )
             )
 
         record(None)
         try:
-            while not task.is_terminal(state) and len(checkpoints) - 1 < self.max_steps:
+            while (
+                not task.is_terminal(state, reference_value)
+                and len(checkpoints) - 1 < self.max_steps
+            ):
                 actions = task.legal_actions(state)
                 if not actions:
                     return GeneratedTrial(
@@ -96,8 +106,14 @@ class MockGenerator:
                         (task.objective(task.apply_action(state, action)), action)
                         for action in actions
                     ]
-                    best = min(score for score, _ in scored)
-                    candidates = [action for score, action in scored if score == best]
+                    best = scored[0][0]
+                    candidates = [scored[0][1]]
+                    for score, candidate_action in scored[1:]:
+                        if task.is_better(score, best):
+                            best = score
+                            candidates = [candidate_action]
+                        elif abs(score - best) <= 1e-9:
+                            candidates.append(candidate_action)
                     action = rng.choice(candidates)
                 else:
                     action = rng.choice(actions)
@@ -114,7 +130,7 @@ class MockGenerator:
                 time.perf_counter() - started,
             )
 
-        success = task.objective(state) == 0
+        success = task.is_success(state, reference_value)
         return GeneratedTrial(
             trial_id=identifier,
             checkpoints=tuple(checkpoints),

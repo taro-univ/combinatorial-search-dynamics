@@ -70,13 +70,16 @@ def collect_provenance(
             "duckdb": _version("duckdb"),
             "mlflow": _version("mlflow"),
             "dvc": _version("dvc"),
+            "ortools": _version("ortools"),
         },
         "unused_phase_2_components": {
             "gpu": "not-used",
             "cuda": "not-used",
             "pytorch": "not-used",
             "transformers": "not-used",
-            "ortools": "not-used",
+            "ortools": "used-for-references"
+            if config["task"]["name"] == "knapsack"
+            else "not-used",
         },
         "resolved_config": config,
         "config_hash": config_hash(config),

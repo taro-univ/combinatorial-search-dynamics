@@ -1,14 +1,15 @@
 defaults:
-  - experiment: pilot
-  - task: dummy_binary
+  - experiment: knapsack_pilot
+  - task: knapsack
+  - solver: ortools_cp_sat
   - llm: mock
   - generation: mock
   - observation: external_only
-  - state_model: baseline
+  - state_model: objective_gap
   - dynamics: markov
   - evaluation: default
-  - storage: local
-  - tracking: local
+  - storage: knapsack_local
+  - tracking: knapsack_local
   - _self_
 
 hydra:

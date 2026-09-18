@@ -3,109 +3,137 @@ stages:
     cmd: uv run lsd generate-instances --force
     deps:
       - configs/config.yaml
-      - configs/experiment/pilot.yaml
-      - configs/task/dummy_binary.yaml
-      - configs/storage/local.yaml
-      - src/llm_search_dynamics/tasks/dummy_binary.py
+      - configs/experiment/knapsack_pilot.yaml
+      - configs/task/knapsack.yaml
+      - configs/storage/knapsack_local.yaml
+      - src/llm_search_dynamics/tasks/knapsack.py
       - src/llm_search_dynamics/tasks/registry.py
       - src/llm_search_dynamics/identifiers.py
       - src/llm_search_dynamics/pipeline/stages.py
     outs:
-      - data/raw/pilot/instances.parquet
+      - data/raw/knapsack_pilot/instances.parquet
+  solve_references:
+    cmd: uv run lsd solve-references --force
+    deps:
+      - data/raw/knapsack_pilot/instances.parquet
+      - configs/task/knapsack.yaml
+      - configs/solver/ortools_cp_sat.yaml
+      - configs/storage/knapsack_local.yaml
+      - src/llm_search_dynamics/solvers/base.py
+      - src/llm_search_dynamics/solvers/registry.py
+      - src/llm_search_dynamics/solvers/ortools_knapsack.py
+      - src/llm_search_dynamics/data/schemas.py
+      - src/llm_search_dynamics/data/references.py
+      - src/llm_search_dynamics/data/reference_validation.py
+      - src/llm_search_dynamics/pipeline/stages.py
+    outs:
+      - data/raw/knapsack_pilot/reference_solutions.parquet
   collect_trajectories:
     cmd: uv run lsd collect --force
     deps:
-      - data/raw/pilot/instances.parquet
+      - data/raw/knapsack_pilot/instances.parquet
+      - data/raw/knapsack_pilot/reference_solutions.parquet
       - configs/generation/mock.yaml
       - configs/llm/mock.yaml
       - configs/observation/external_only.yaml
-      - configs/experiment/pilot.yaml
-      - configs/task/dummy_binary.yaml
-      - configs/storage/local.yaml
+      - configs/experiment/knapsack_pilot.yaml
+      - configs/task/knapsack.yaml
+      - configs/storage/knapsack_local.yaml
       - src/llm_search_dynamics/generation/mock.py
       - src/llm_search_dynamics/data/zarr.py
     outs:
-      - data/raw/pilot/trials.parquet
-      - data/raw/pilot/checkpoints.parquet
-      - data/raw/pilot/observations.zarr
-      - data/raw/pilot/metrics.parquet
+      - data/raw/knapsack_pilot/trials.parquet
+      - data/raw/knapsack_pilot/checkpoints.parquet
+      - data/raw/knapsack_pilot/observations.zarr
+      - data/raw/knapsack_pilot/metrics.parquet
   prepare_trajectories:
     cmd: uv run lsd prepare --force
     deps:
-      - data/raw/pilot/instances.parquet
-      - data/raw/pilot/trials.parquet
-      - data/raw/pilot/checkpoints.parquet
-      - data/raw/pilot/observations.zarr
-      - data/raw/pilot/metrics.parquet
+      - data/raw/knapsack_pilot/instances.parquet
+      - data/raw/knapsack_pilot/trials.parquet
+      - data/raw/knapsack_pilot/checkpoints.parquet
+      - data/raw/knapsack_pilot/observations.zarr
+      - data/raw/knapsack_pilot/metrics.parquet
+      - data/raw/knapsack_pilot/reference_solutions.parquet
       - src/llm_search_dynamics/data/validation.py
+      - src/llm_search_dynamics/data/reference_validation.py
     outs:
-      - data/interim/pilot/trajectories.json
+      - data/interim/knapsack_pilot/trajectories.json
   extract_features:
     cmd: uv run lsd extract --force
     deps:
-      - data/interim/pilot/trajectories.json
+      - data/interim/knapsack_pilot/trajectories.json
+      - data/raw/knapsack_pilot/reference_solutions.parquet
       - configs/observation/external_only.yaml
       - src/llm_search_dynamics/features/external.py
     outs:
-      - data/derived/pilot/features.json
+      - data/derived/knapsack_pilot/features.json
   make_splits:
     cmd: uv run lsd split --force
     deps:
-      - data/derived/pilot/features.json
-      - data/raw/pilot/instances.parquet
-      - configs/experiment/pilot.yaml
+      - data/derived/knapsack_pilot/features.json
+      - data/raw/knapsack_pilot/instances.parquet
+      - configs/experiment/knapsack_pilot.yaml
       - configs/evaluation/default.yaml
       - src/llm_search_dynamics/data/splits.py
     outs:
-      - data/derived/pilot/splits.json
+      - data/derived/knapsack_pilot/splits.json
   fit_model:
     cmd: uv run lsd fit --force
     deps:
-      - data/derived/pilot/features.json
-      - data/derived/pilot/splits.json
-      - configs/state_model/baseline.yaml
+      - data/derived/knapsack_pilot/features.json
+      - data/derived/knapsack_pilot/splits.json
+      - data/raw/knapsack_pilot/reference_solutions.parquet
+      - configs/state_model/objective_gap.yaml
       - configs/dynamics/markov.yaml
-      - src/llm_search_dynamics/state_models/baseline.py
+      - src/llm_search_dynamics/state_models/objective_gap.py
+      - src/llm_search_dynamics/state_models/registry.py
       - src/llm_search_dynamics/dynamics/transition.py
     outs:
-      - artifacts/pilot/state_model.json
-      - artifacts/pilot/dynamics_model.json
-      - data/derived/pilot/state_assignments.json
+      - artifacts/knapsack_pilot/state_model.json
+      - artifacts/knapsack_pilot/dynamics_model.json
+      - data/derived/knapsack_pilot/state_assignments.json
   evaluate_model:
     cmd: uv run lsd evaluate --force
     deps:
-      - data/derived/pilot/state_assignments.json
-      - data/derived/pilot/splits.json
-      - artifacts/pilot/state_model.json
-      - artifacts/pilot/dynamics_model.json
-      - data/raw/pilot/instances.parquet
-      - data/raw/pilot/trials.parquet
-      - data/raw/pilot/checkpoints.parquet
-      - data/raw/pilot/observations.zarr
-      - data/raw/pilot/metrics.parquet
+      - data/derived/knapsack_pilot/state_assignments.json
+      - data/derived/knapsack_pilot/splits.json
+      - artifacts/knapsack_pilot/state_model.json
+      - artifacts/knapsack_pilot/dynamics_model.json
+      - data/raw/knapsack_pilot/instances.parquet
+      - data/raw/knapsack_pilot/trials.parquet
+      - data/raw/knapsack_pilot/checkpoints.parquet
+      - data/raw/knapsack_pilot/observations.zarr
+      - data/raw/knapsack_pilot/metrics.parquet
+      - data/raw/knapsack_pilot/reference_solutions.parquet
       - configs/evaluation/default.yaml
-      - configs/tracking/local.yaml
+      - configs/tracking/knapsack_local.yaml
       - src/llm_search_dynamics/evaluation/metrics.py
+      - src/llm_search_dynamics/evaluation/knapsack.py
       - src/llm_search_dynamics/provenance.py
       - src/llm_search_dynamics/tracking/mlflow.py
     outs:
-      - data/derived/pilot/metrics.parquet
-      - data/derived/pilot/predictions.json
-      - data/derived/pilot/evaluation_summary.json
-      - artifacts/pilot/provenance.json
-      - artifacts/pilot/resolved_config.json
-      - artifacts/pilot/validation.json
-      - artifacts/pilot/run.json
+      - data/derived/knapsack_pilot/metrics.parquet
+      - data/derived/knapsack_pilot/predictions.json
+      - data/derived/knapsack_pilot/evaluation_summary.json
+      - artifacts/knapsack_pilot/provenance.json
+      - artifacts/knapsack_pilot/resolved_config.json
+      - artifacts/knapsack_pilot/validation.json
+      - artifacts/knapsack_pilot/run.json
+      - artifacts/knapsack_pilot/solver_config.json
+      - artifacts/knapsack_pilot/solver_status_summary.json
+      - artifacts/knapsack_pilot/feasible_check.json
   build_report:
     cmd: uv run lsd report --force
     deps:
-      - data/derived/pilot/evaluation_summary.json
-      - data/derived/pilot/splits.json
-      - data/raw/pilot/instances.parquet
-      - data/raw/pilot/trials.parquet
-      - data/raw/pilot/checkpoints.parquet
-      - artifacts/pilot/run.json
+      - data/derived/knapsack_pilot/evaluation_summary.json
+      - data/derived/knapsack_pilot/splits.json
+      - data/raw/knapsack_pilot/instances.parquet
+      - data/raw/knapsack_pilot/trials.parquet
+      - data/raw/knapsack_pilot/checkpoints.parquet
+      - data/raw/knapsack_pilot/reference_solutions.parquet
+      - artifacts/knapsack_pilot/run.json
       - src/llm_search_dynamics/reporting/tables.py
     outs:
-      - artifacts/pilot/report.md
-      - artifacts/pilot/summary.csv
+      - artifacts/knapsack_pilot/report.md
+      - artifacts/knapsack_pilot/summary.csv

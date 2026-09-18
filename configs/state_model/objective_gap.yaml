@@ -1,0 +1,5 @@
+name: objective_gap
+version: "1"
+implemented: true
+# Fixed a priori; neither validation nor test values set these boundaries.
+bin_boundaries: [0.05, 0.15, 0.30, 0.60]

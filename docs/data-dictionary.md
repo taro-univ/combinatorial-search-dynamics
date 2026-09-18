@@ -100,3 +100,36 @@ test metricsは`one_step_nll`（観測次状態確率を最低`1e-12`にclipし�
 ## DuckDB views
 
 4つのParquetは同名のDuckDB viewとして直接参照できる。`analysis_checkpoints`は`instances.instance_id = trials.instance_id`、`trials.trial_id = checkpoints.trial_id`でjoinし、checkpointごとの問題条件・trial条件・状態を横断分析する。metricsは多対多化による行数増加を避けるため、このviewには含めない。
+
+## Phase 3 optional extension: reference_solutions
+
+Phase 1の4必須表とschema version `1`は変更しない。ナップサックdatasetに限り`reference_solutions.parquet`を同じraw snapshotに要求する。`reference_id`は`instance_id`、solver名/version、全parameter、solve seedのcanonical JSONから生成する安定IDである。同じ条件の行は複合キー`(instance_id, solver_name, solver_version, solver_parameters_json, solve_seed)`でも一意にする。1つのdataset snapshot内ではinstanceごとに1つの参照条件だけを認め、異なる条件が混在すると曖昧なjoinとして拒否する。外部キーは`instance_id → instances.instance_id`。
+
+| Column | Type | Nullable | Meaning |
+|---|---|---:|---|
+| schema_version | string | no | 現行`1` |
+| reference_id | string | no | 安定した参照結果ID |
+| instance_id | string | no | 対象instanceの外部キー |
+| task_name | string | no | `knapsack` |
+| task_version | string | no | Task定義version |
+| solver_name | string | no | `ortools_cp_sat` |
+| solver_version | string | no | OR-Tools version |
+| solver_status | string | no | OPTIMAL/FEASIBLE/INFEASIBLE/MODEL_INVALID/UNKNOWN/ERROR |
+| best_feasible_value | float64 | yes | solverが発見した実行可能目的値 |
+| best_bound | float64 | yes | 最大化問題の最適値の上界 |
+| optimal_value | float64 | yes | OPTIMALで証明された場合のみ設定 |
+| optimality_gap | float64 | yes | solverの上界と実行可能値の相対gap |
+| optimality_proven | bool | no | OPTIMALだけtrue |
+| timed_out | bool | no | 時間制限による終了の明示分類 |
+| runtime_seconds | float64 | no | solver実行時間。mock runtimeとは別 |
+| solution_json | string | yes | 0/1選択vectorのcanonical JSON |
+| solver_parameters_json | string | no | 完全なsolver条件のcanonical JSON |
+| solve_seed | int64 | no | CP-SAT seed |
+| error_type | string | yes | 失敗型の短い識別子 |
+| created_at | timestamp[us, UTC] | no | 記録時刻。IDと科学的結果には使わない |
+
+Parquet schema metadataには`logical_table=reference_solutions`と`schema_version=1`が入る。Zstandard圧縮、書込後読戻し検証、atomic rename、既定の上書き拒否はPhase 1 APIを再利用する。solverの最大化gapは、実行可能値`z`と上界`b`に対し`max(0, b-z)/max(abs(z), epsilon)`、既定`epsilon=1e-9`。解または上界がなければnull、OPTIMALなら0。checkpointの`optimality_gap`は異なる量で、証明済みoptimal値`o`と現在価値`v`に対し`max(0, o-v)/max(abs(o), epsilon)`である。未証明参照ではnull。両者を混同しない。
+
+ナップサックinstanceの`instance_json`はweights、values、capacity、item_count、generation seed、task名/versionを持つ。checkpointの`state_json`はselected vector、total weight/value、step等を持ち、capacity、actionによる遷移、再計算値を検査する。`objective_value`は現在のtotal value。rawには4必須表、参照表、external-only Zarrを配置し、interimは復元済みtrajectory、derivedは特徴/split/状態/評価値、artifactsはmodel/report/provenanceを持つ。
+
+問題固有のtest metricsは`knapsack_success_rate_trial`（n_units=trial数）、`knapsack_success_rate_instance`（instance数）、`knapsack_final_value_mean`と`knapsack_best_so_far_value_mean`（trial数）、`knapsack_final_absolute_gap_mean`と`knapsack_final_relative_gap_mean`（証明済み参照を持つtrial数）、`knapsack_optimal_reached_step_mean`（到達trial数）、`knapsack_feasible_checkpoint_rate`（checkpoint数）、`solver_timeout_rate_test`と`solver_optimality_proven_rate_test`（test instance数）である。既存Markov予測指標の`n_units`はtransition数、件数metricの`n_units`は1のままである。timeout/未証明instanceはsolver率の分母から落とさない。

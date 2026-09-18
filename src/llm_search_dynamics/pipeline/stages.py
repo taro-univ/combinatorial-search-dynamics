@@ -1,7 +1,8 @@
-"""Phase 2 pilot stages with explicit inputs, outputs, and collision checks."""
+"""CPU pilot stages with explicit inputs, outputs, and collision checks."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -16,23 +17,29 @@ import pyarrow as pa
 
 from llm_search_dynamics.config import repository_root
 from llm_search_dynamics.data.parquet import read_parquet, write_parquet
+from llm_search_dynamics.data.reference_validation import validate_references
+from llm_search_dynamics.data.references import reference_id, reference_row
 from llm_search_dynamics.data.schemas import SCHEMA_VERSION, empty_table, get_schema
 from llm_search_dynamics.data.splits import make_instance_split, read_split, write_split
 from llm_search_dynamics.data.validation import validate_dataset
 from llm_search_dynamics.data.zarr import ObservationArray, write_observation_store
 from llm_search_dynamics.dynamics.transition import MarkovTransitionModel
+from llm_search_dynamics.evaluation.knapsack import evaluate_knapsack
 from llm_search_dynamics.evaluation.metrics import evaluate_trajectories
 from llm_search_dynamics.features.external import extract_external_features
 from llm_search_dynamics.generation.mock import (
-    GENERATOR_NAME,
     GENERATOR_REVISION,
     MockGenerator,
+    generator_name,
 )
 from llm_search_dynamics.identifiers import canonical_json, experiment_id, instance_id
 from llm_search_dynamics.provenance import collect_provenance, config_hash
 from llm_search_dynamics.reporting.tables import build_pilot_report
-from llm_search_dynamics.state_models.baseline import HammingDistanceStateModel
+from llm_search_dynamics.solvers.base import SolverParameters, SolverResult, SolverStatus
+from llm_search_dynamics.solvers.registry import get_solver
+from llm_search_dynamics.state_models.registry import get_state_model, load_state_model
 from llm_search_dynamics.tasks.dummy_binary import BinaryInstance
+from llm_search_dynamics.tasks.knapsack import KnapsackInstance
 from llm_search_dynamics.tasks.registry import get_task
 from llm_search_dynamics.tracking.mlflow import local_tracking_uri, log_artifacts, record_run
 
@@ -44,6 +51,7 @@ class PilotPaths:
     interim: Path
     derived: Path
     artifacts: Path
+    reference: Path | None
     tracking_uri: str
 
     @classmethod
@@ -61,6 +69,9 @@ class PilotPaths:
             interim=resolve(storage["interim_data_dir"]),
             derived=resolve(storage["derived_data_dir"]),
             artifacts=resolve(storage["artifact_dir"]),
+            reference=resolve(storage["reference_table_path"])
+            if storage.get("reference_table_path")
+            else None,
             tracking_uri=local_tracking_uri(config["tracking"]["tracking_uri"], root=source),
         )
 
@@ -87,9 +98,10 @@ def _write_json(path: Path, payload: Any) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def _outputs(paths: PilotPaths, stage: str) -> list[Path]:
+def _outputs(paths: PilotPaths, stage: str, config: dict[str, Any]) -> list[Path]:
     mapping = {
         "generate-instances": [paths.raw / "instances.parquet"],
+        "solve-references": [paths.reference] if paths.reference is not None else [],
         "collect": [
             paths.raw / "trials.parquet",
             paths.raw / "checkpoints.parquet",
@@ -115,11 +127,21 @@ def _outputs(paths: PilotPaths, stage: str) -> list[Path]:
         ],
         "report": [paths.artifacts / "report.md", paths.artifacts / "summary.csv"],
     }
-    return mapping[stage]
+    outputs = mapping[stage]
+    if stage == "evaluate" and config["task"]["name"] == "knapsack":
+        outputs = [
+            *outputs,
+            paths.artifacts / "solver_config.json",
+            paths.artifacts / "solver_status_summary.json",
+            paths.artifacts / "feasible_check.json",
+        ]
+    return outputs
 
 
-def _guard_outputs(paths: PilotPaths, stage: str, *, force: bool) -> list[Path]:
-    outputs = _outputs(paths, stage)
+def _guard_outputs(
+    paths: PilotPaths, stage: str, config: dict[str, Any], *, force: bool
+) -> list[Path]:
+    outputs = _outputs(paths, stage, config)
     existing = [path for path in outputs if path.exists()]
     if existing and not force:
         raise FileExistsError(
@@ -139,10 +161,34 @@ def _table(name: str, rows: list[dict[str, Any]]) -> pa.Table:
 
 
 def _task(config: dict[str, Any]) -> Any:
+    params = {
+        key: value
+        for key, value in config["task"].items()
+        if key not in {"name", "version", "implemented"}
+    }
     return get_task(
-        config["task"]["name"],
-        bit_count=int(config["task"]["bit_count"]),
-        max_steps=int(config["generation"]["max_steps"]),
+        config["task"]["name"], max_steps=int(config["generation"]["max_steps"]), **params
+    )
+
+
+def _instance_from_row(task: Any, row: dict[str, Any]) -> BinaryInstance | KnapsackInstance:
+    payload = json.loads(row["instance_json"])
+    if task.name == "knapsack":
+        instance = KnapsackInstance.from_dict(payload)
+    else:
+        instance = BinaryInstance.from_dict(payload)
+    task.initial_state(instance)
+    return instance
+
+
+def _solver_parameters(config: dict[str, Any]) -> SolverParameters:
+    selected = config["solver"]
+    return SolverParameters(
+        max_time_seconds=float(selected["max_time_seconds"]),
+        num_search_workers=selected["num_search_workers"],
+        random_seed=selected["random_seed"],
+        relative_gap_epsilon=float(selected["relative_gap_epsilon"]),
+        log_search_progress=selected["log_search_progress"],
     )
 
 
@@ -179,8 +225,12 @@ def _generate_instances(config: dict[str, Any], paths: PilotPaths) -> None:
                 "instance_id": identifier,
                 "task_name": task.name,
                 "task_version": task.version,
-                "problem_size": instance.bit_count,
-                "difficulty_value": float(
+                "problem_size": instance.item_count
+                if task.name == "knapsack"
+                else instance.bit_count,
+                "difficulty_value": None
+                if task.name == "knapsack"
+                else float(
                     sum(a != b for a, b in zip(instance.initial_bits, instance.target_bits))
                 ),
                 "generation_seed": seed,
@@ -190,6 +240,51 @@ def _generate_instances(config: dict[str, Any], paths: PilotPaths) -> None:
             }
         )
     write_parquet(_table("instances", rows), paths.raw / "instances.parquet", "instances")
+
+
+def _solve_references(config: dict[str, Any], paths: PilotPaths) -> None:
+    if config["task"]["name"] != "knapsack" or paths.reference is None:
+        raise ValueError("solve-references requires the knapsack task and reference path")
+    task = _task(config)
+    parameters = _solver_parameters(config)
+    solver = get_solver(config["solver"]["name"], task=task, parameters=parameters)
+    instances = read_parquet(paths.raw / "instances.parquet", "instances")
+    rows: list[dict[str, Any]] = []
+    for source in instances.to_pylist():
+        try:
+            instance = _instance_from_row(task, source)
+            result = solver.solve(instance, instance_id=source["instance_id"])
+        except (KeyError, TypeError, ValueError, RuntimeError) as exc:
+            result = SolverResult(
+                instance_id=source["instance_id"],
+                solver_name=solver.name,
+                solver_version=solver.version,
+                status=SolverStatus.ERROR,
+                best_feasible_value=None,
+                best_bound=None,
+                optimal_value=None,
+                optimality_gap=None,
+                optimality_proven=False,
+                timed_out=False,
+                runtime_seconds=0.0,
+                solution=None,
+                parameters=parameters,
+                error_type=type(exc).__name__,
+            )
+        rows.append(reference_row(result, task_name=task.name, task_version=task.version))
+    table = _table("reference_solutions", rows)
+    problems: list[Any] = []
+    validate_references(table, instances, problems)
+    if problems:
+        raise ValueError(f"Reference table has {len(problems)} semantic validation errors")
+    write_parquet(table, paths.reference, "reference_solutions")
+
+
+def _reference_rows(paths: PilotPaths) -> dict[str, dict[str, Any]]:
+    if paths.reference is None:
+        raise ValueError("Reference path is not configured")
+    table = read_parquet(paths.reference, "reference_solutions")
+    return {row["instance_id"]: row for row in table.to_pylist()}
 
 
 def _collect(config: dict[str, Any], paths: PilotPaths) -> None:
@@ -204,13 +299,19 @@ def _collect(config: dict[str, Any], paths: PilotPaths) -> None:
     trials: list[dict[str, Any]] = []
     checkpoints: list[dict[str, Any]] = []
     bits: list[list[int]] = []
+    references = _reference_rows(paths) if task.name == "knapsack" else {}
     seed_base = int(config["experiment"]["seed"]["llm_sampling"])
     trial_count = int(config["generation"]["trials"])
     if trial_count < 1:
         raise ValueError("generation.trials must be positive")
     for instance_index, row in enumerate(instances):
-        instance = BinaryInstance.from_dict(json.loads(row["instance_json"]))
-        task.initial_state(instance)
+        instance = _instance_from_row(task, row)
+        reference = references.get(row["instance_id"])
+        if task.name == "knapsack" and reference is None:
+            raise ValueError(f"Reference is missing for instance {row['instance_id']}")
+        optimal = (
+            reference["optimal_value"] if reference and reference["optimality_proven"] else None
+        )
         for trial_index in range(trial_count):
             sampling_seed = seed_base + instance_index * trial_count + trial_index
             generated = generator.generate(
@@ -219,6 +320,7 @@ def _collect(config: dict[str, Any], paths: PilotPaths) -> None:
                 source_instance_id=row["instance_id"],
                 experiment_conditions=conditions,
                 sampling_seed=sampling_seed,
+                reference_value=optimal,
             )
             trials.append(
                 {
@@ -226,7 +328,7 @@ def _collect(config: dict[str, Any], paths: PilotPaths) -> None:
                     "trial_id": generated.trial_id,
                     "instance_id": row["instance_id"],
                     "experiment_id": exp_id,
-                    "llm_name": GENERATOR_NAME,
+                    "llm_name": generator_name(task.name),
                     "llm_revision": GENERATOR_REVISION,
                     "sampling_seed": sampling_seed,
                     "temperature": float(config["generation"]["temperature"]),
@@ -239,6 +341,8 @@ def _collect(config: dict[str, Any], paths: PilotPaths) -> None:
                 }
             )
             for point in generated.checkpoints:
+                if not task.is_feasible(point.state):
+                    raise ValueError(f"Mock checkpoint is infeasible: {point.checkpoint_id}")
                 checkpoints.append(
                     {
                         "schema_version": SCHEMA_VERSION,
@@ -248,14 +352,24 @@ def _collect(config: dict[str, Any], paths: PilotPaths) -> None:
                         "checkpoint_index": point.checkpoint_index,
                         "state_json": canonical_json(task.serialize_state(point.state)),
                         "objective_value": point.objective,
-                        "optimality_gap": None,
+                        "optimality_gap": task.objective_gap(
+                            point.objective,
+                            optimal,
+                            epsilon=float(config["solver"]["relative_gap_epsilon"]),
+                        )
+                        if optimal is not None
+                        else None,
                         "remaining_budget": point.remaining_budget,
                         "is_terminal": point.is_terminal,
                         "parse_status": "parsed",
                         "tensor_ref": None,
                     }
                 )
-                bits.append(list(point.state.bits))
+                bits.append(
+                    list(point.state.selected)
+                    if task.name == "knapsack"
+                    else list(point.state.bits)
+                )
 
     write_parquet(_table("trials", trials), paths.raw / "trials.parquet", "trials")
     write_parquet(
@@ -268,14 +382,20 @@ def _collect(config: dict[str, Any], paths: PilotPaths) -> None:
             "external_state": ObservationArray(
                 values=values,
                 valid_mask=np.ones_like(values, dtype=np.bool_),
-                axis_names=("checkpoint", "bit"),
+                axis_names=("checkpoint", "item" if task.name == "knapsack" else "bit"),
             )
         },
         trial_ids=[row["trial_id"] for row in checkpoints],
         checkpoint_ids=[row["checkpoint_id"] for row in checkpoints],
         generated_token_indices=[row["generated_token_index"] for row in checkpoints],
         observation_code_version=str(config["observation"]["code_version"]),
-        observation_metadata={"source": "mock", "observation_kind": "external-only"},
+        observation_metadata={
+            "source": "mock",
+            "observation_kind": "external-only",
+            "task_name": task.name,
+        }
+        if task.name == "knapsack"
+        else {"source": "mock", "observation_kind": "external-only"},
     )
     # Last output completes the four-table Phase 1 dataset snapshot.
     write_parquet(empty_table("metrics"), paths.raw / "metrics.parquet", "metrics")
@@ -305,6 +425,8 @@ def _prepare(config: dict[str, Any], paths: PilotPaths) -> None:
                 "checkpoint_id": checkpoint["checkpoint_id"],
                 "checkpoint_index": checkpoint["checkpoint_index"],
                 "state": task.serialize_state(parsed),
+                "objective_value": checkpoint["objective_value"],
+                "optimality_gap": checkpoint["optimality_gap"],
             }
         )
     trajectories = [
@@ -357,29 +479,34 @@ def _fit(config: dict[str, Any], paths: PilotPaths) -> None:
     features = _json(paths.derived / "features.json")
     split = read_split(paths.derived / "splits.json")
     train_ids = split.fit_instance_ids("train")
-    model = HammingDistanceStateModel(bit_count=int(config["task"]["bit_count"]))
-    train_features = [row for row in features if row["instance_id"] in train_ids]
+    model = get_state_model(config["state_model"], config["task"])
+    eligible = (
+        [row for row in features if row["optimality_gap"] is not None]
+        if config["task"]["name"] == "knapsack"
+        else features
+    )
+    train_features = [row for row in eligible if row["instance_id"] in train_ids]
     model.fit(
         train_features,
         fit_split="train",
         split_hash=split.split_hash,
         instance_ids=train_ids,
     )
-    transformed = model.transform(features)
+    transformed = model.transform(eligible)
     _write_json(paths.derived / "state_assignments.json", transformed)
     model.save(paths.artifacts / "state_model.json")
     train_trajectories = _trajectories_from_states(
         [row for row in transformed if row["instance_id"] in train_ids]
     )
     dynamics = MarkovTransitionModel(
-        state_count=model.bit_count + 1,
+        state_count=model.state_count if hasattr(model, "state_count") else model.bit_count + 1,
         smoothing=float(config["dynamics"]["smoothing"]),
     )
     dynamics.fit(
         [row["states"] for row in train_trajectories],
         fit_split="train",
         split_hash=split.split_hash,
-        instance_ids=train_ids,
+        instance_ids=[row["instance_id"] for row in train_trajectories],
     )
     dynamics.save(paths.artifacts / "dynamics_model.json")
 
@@ -387,9 +514,9 @@ def _fit(config: dict[str, Any], paths: PilotPaths) -> None:
 def _evaluate(config: dict[str, Any], paths: PilotPaths) -> None:
     started_at = datetime.now(UTC)
     if int(config["evaluation"]["horizon"]) != 1:
-        raise ValueError("Phase 2 evaluation implements only the one-step horizon")
+        raise ValueError("The pilot evaluation implements only the one-step horizon")
     split = read_split(paths.derived / "splits.json")
-    state_model = HammingDistanceStateModel.load(paths.artifacts / "state_model.json")
+    state_model = load_state_model(paths.artifacts / "state_model.json")
     dynamics = MarkovTransitionModel.load(paths.artifacts / "dynamics_model.json")
     if state_model.fit_metadata["split_hash"] != split.split_hash:
         raise ValueError("State model split hash differs from the current split")
@@ -411,10 +538,40 @@ def _evaluate(config: dict[str, Any], paths: PilotPaths) -> None:
         probability_floor=float(config["evaluation"]["probability_floor"]),
     )
     if not result.n_transitions:
-        raise ValueError("No held-out transitions are available for evaluation")
+        raise ValueError("No held-out transitions with proven references are available")
     validation = validate_dataset(paths.raw)
     if not validation.is_valid:
         raise ValueError(f"Dataset validation failed with {validation.error_count} errors")
+    problem = None
+    problem_metric_values: dict[str, float] = {}
+    extra_artifacts: list[Path] = []
+    if config["task"]["name"] == "knapsack":
+        task = _task(config)
+        references = list(_reference_rows(paths).values())
+        problem = evaluate_knapsack(
+            task=task,
+            instances=read_parquet(paths.raw / "instances.parquet", "instances").to_pylist(),
+            trials=read_parquet(paths.raw / "trials.parquet", "trials").to_pylist(),
+            checkpoints=read_parquet(paths.raw / "checkpoints.parquet", "checkpoints").to_pylist(),
+            references=references,
+            test_instance_ids=test_ids,
+        )
+        problem_metric_values = {name: metric.value for name, metric in problem.metrics.items()}
+        solver_config_path = paths.artifacts / "solver_config.json"
+        status_path = paths.artifacts / "solver_status_summary.json"
+        feasible_path = paths.artifacts / "feasible_check.json"
+        _write_json(solver_config_path, config["solver"])
+        _write_json(status_path, problem.report)
+        _write_json(
+            feasible_path,
+            {
+                "valid": validation.is_valid,
+                "checkpoint_issue_count": sum(
+                    issue.table_or_artifact == "checkpoints" for issue in validation.issues
+                ),
+            },
+        )
+        extra_artifacts = [paths.reference, solver_config_path, status_path, feasible_path]
     _write_json(
         paths.derived / "predictions.json",
         {
@@ -434,6 +591,15 @@ def _evaluate(config: dict[str, Any], paths: PilotPaths) -> None:
     provenance = collect_provenance(
         root=paths.root, config=config, started_at=started_at, ended_at=datetime.now(UTC)
     )
+    if problem is not None:
+        provenance["solver"] = {
+            "ortools_version": provenance["dependency_versions"]["ortools"],
+            "solver_class": "OrtoolsKnapsackSolver",
+            "parameters": config["solver"],
+            "seed": config["solver"]["random_seed"],
+            "reference_table_sha256": hashlib.sha256(paths.reference.read_bytes()).hexdigest(),
+            "reference_schema_version": SCHEMA_VERSION,
+        }
     _write_json(paths.artifacts / "provenance.json", provenance)
     config_digest = config_hash(config)
     tags = {
@@ -444,10 +610,22 @@ def _evaluate(config: dict[str, Any], paths: PilotPaths) -> None:
         "task_name": config["task"]["name"],
         "task_version": str(config["task"]["version"]),
         "split_hash": split.split_hash,
-        "generator_name": GENERATOR_NAME,
+        "generator_name": generator_name(config["task"]["name"]),
         "generator_revision": GENERATOR_REVISION,
         "dvc_revision": provenance["dvc_revision"],
     }
+    if problem is not None:
+        tags.update(
+            {
+                "solver_name": config["solver"]["name"],
+                "solver_version": provenance["dependency_versions"]["ortools"],
+                "solver_status_summary": canonical_json(problem.report["solver_status_counts"]),
+                "reference_schema_version": SCHEMA_VERSION,
+                "reference_configuration_hash": config_hash(
+                    {"task": config["task"], "solver": config["solver"]}
+                ),
+            }
+        )
 
     def write_run_outputs(run_id: str) -> list[Path]:
         rows = [
@@ -480,6 +658,20 @@ def _evaluate(config: dict[str, Any], paths: PilotPaths) -> None:
                 ("evaluated_trials", result.n_trials),
             )
         )
+        if problem is not None:
+            rows.extend(
+                {
+                    "schema_version": SCHEMA_VERSION,
+                    "run_id": run_id,
+                    "split": "test",
+                    "fold": None,
+                    "horizon": None,
+                    "metric_name": name,
+                    "metric_value": metric.value,
+                    "n_units": metric.n_units,
+                }
+                for name, metric in problem.metrics.items()
+            )
         metric_path = paths.derived / "metrics.parquet"
         write_parquet(_table("metrics", rows), metric_path, "metrics")
         run_path = paths.artifacts / "run.json"
@@ -494,6 +686,8 @@ def _evaluate(config: dict[str, Any], paths: PilotPaths) -> None:
                 "n_transitions": result.n_transitions,
                 "n_instances": result.n_instances,
                 "n_trials": result.n_trials,
+                "problem_metrics": problem_metric_values,
+                "problem_report": problem.report if problem is not None else None,
             },
         )
         return [metric_path, run_path, summary_path]
@@ -502,7 +696,11 @@ def _evaluate(config: dict[str, Any], paths: PilotPaths) -> None:
         tracking_uri=paths.tracking_uri,
         experiment_name=config["tracking"]["experiment_name"],
         parameters=config,
-        metrics={**result.metrics, "evaluated_transitions": float(result.n_transitions)},
+        metrics={
+            **result.metrics,
+            **problem_metric_values,
+            "evaluated_transitions": float(result.n_transitions),
+        },
         tags=tags,
         artifacts=[
             paths.artifacts / "resolved_config.json",
@@ -512,6 +710,7 @@ def _evaluate(config: dict[str, Any], paths: PilotPaths) -> None:
             paths.derived / "predictions.json",
             paths.artifacts / "provenance.json",
             paths.artifacts / "validation.json",
+            *extra_artifacts,
         ],
         prepare_artifacts=write_run_outputs,
     )
@@ -529,10 +728,11 @@ def _report(config: dict[str, Any], paths: PilotPaths) -> None:
     }
     distances = [float(last[row["trial_id"]]["objective_value"]) for row in trials]
     values: dict[str, Any] = {
+        "problem_type": config["task"]["name"],
         "run_id": run["run_id"],
         "config_hash": summary["config_hash"],
         "task": f"{config['task']['name']}@{config['task']['version']}",
-        "generator": f"{GENERATOR_NAME}@{GENERATOR_REVISION}",
+        "generator": f"{generator_name(config['task']['name'])}@{GENERATOR_REVISION}",
         "instances": instances.num_rows,
         "trials": len(trials),
         "checkpoints": len(checkpoints),
@@ -540,7 +740,6 @@ def _report(config: dict[str, Any], paths: PilotPaths) -> None:
         "validation_instances": len(split.instance_ids("validation")),
         "test_instances": len(split.instance_ids("test")),
         "success_rate": sum(row["success"] for row in trials) / len(trials),
-        "mean_final_hamming_distance": sum(distances) / len(distances),
         "one_step_nll": summary["one_step_nll"],
         "one_step_accuracy": summary["one_step_accuracy"],
         "success_brier_score": summary["success_brier_score"],
@@ -548,6 +747,31 @@ def _report(config: dict[str, Any], paths: PilotPaths) -> None:
         "evaluated_instances": summary["n_instances"],
         "evaluated_trials": summary["n_trials"],
     }
+    if config["task"]["name"] == "knapsack":
+        references = list(_reference_rows(paths).values())
+        values.update(
+            {
+                "item_count": config["task"]["item_count"],
+                "weight_range": f"{config['task']['min_weight']}..{config['task']['max_weight']}",
+                "value_range": f"{config['task']['min_value']}..{config['task']['max_value']}",
+                "capacity_ratio": config["task"]["capacity_ratio"],
+                "solver": f"{config['solver']['name']}@{references[0]['solver_version']}",
+                "solver_status_counts": canonical_json(
+                    summary["problem_report"]["solver_status_counts"]
+                ),
+                "solver_timeout_count": summary["problem_report"]["solver_timeout_count"],
+                "solver_optimality_proven_rate": summary["problem_report"][
+                    "solver_optimality_proven_rate"
+                ],
+                "solver_runtime_mean_seconds": summary["problem_report"][
+                    "solver_runtime_mean_seconds"
+                ],
+                "mean_final_total_value": sum(distances) / len(distances),
+                **summary["problem_metrics"],
+            }
+        )
+    else:
+        values["mean_final_hamming_distance"] = sum(distances) / len(distances)
     artifact_paths = [
         Path(os.path.relpath(path, paths.artifacts))
         for path in (
@@ -562,6 +786,16 @@ def _report(config: dict[str, Any], paths: PilotPaths) -> None:
             paths.artifacts / "summary.csv",
         )
     ]
+    if config["task"]["name"] == "knapsack":
+        artifact_paths.extend(
+            Path(os.path.relpath(path, paths.artifacts))
+            for path in (
+                paths.reference,
+                paths.artifacts / "solver_config.json",
+                paths.artifacts / "solver_status_summary.json",
+                paths.artifacts / "feasible_check.json",
+            )
+        )
     report_path, summary_path = build_pilot_report(
         report_path=paths.artifacts / "report.md",
         summary_path=paths.artifacts / "summary.csv",
@@ -577,6 +811,7 @@ def _report(config: dict[str, Any], paths: PilotPaths) -> None:
 
 STAGE_NAMES = (
     "generate-instances",
+    "solve-references",
     "collect",
     "prepare",
     "extract",
@@ -587,6 +822,34 @@ STAGE_NAMES = (
 )
 
 
+def _references_reusable(config: dict[str, Any], paths: PilotPaths) -> bool:
+    """Reuse a completed reference table only for identical instance/solver inputs."""
+    if paths.reference is None or not paths.reference.is_file():
+        return False
+    instances = read_parquet(paths.raw / "instances.parquet", "instances")
+    references = read_parquet(paths.reference, "reference_solutions")
+    problems: list[Any] = []
+    validate_references(references, instances, problems)
+    if problems:
+        return False
+    parameters = _solver_parameters(config)
+    solver = get_solver(config["solver"]["name"], task=_task(config), parameters=parameters)
+    rows = references.to_pylist()
+    if len(rows) != instances.num_rows:
+        return False
+    return all(
+        row["reference_id"]
+        == reference_id(
+            row["instance_id"],
+            solver_name=solver.name,
+            solver_version=solver.version,
+            parameters=parameters.to_dict(),
+            solve_seed=parameters.random_seed,
+        )
+        for row in rows
+    )
+
+
 def run_stage(
     stage: str, config: dict[str, Any], *, root: Path | None = None, force: bool = False
 ) -> list[Path]:
@@ -594,9 +857,13 @@ def run_stage(
     if stage not in STAGE_NAMES:
         raise ValueError(f"Unknown pilot stage: {stage}")
     paths = PilotPaths.from_config(config, root=root)
-    outputs = _guard_outputs(paths, stage, force=force)
+    if stage == "solve-references" and not force and _references_reusable(config, paths):
+        return [paths.reference]
+    outputs = _guard_outputs(paths, stage, config, force=force)
     if stage == "generate-instances":
         _generate_instances(config, paths)
+    elif stage == "solve-references":
+        _solve_references(config, paths)
     elif stage == "collect":
         _collect(config, paths)
     elif stage == "prepare":
@@ -618,4 +885,9 @@ def reproduce_pilot(
     config: dict[str, Any], *, root: Path | None = None, force: bool = False
 ) -> dict[str, list[Path]]:
     """Run every stage once, without invoking a recursive CLI or DVC process."""
-    return {stage: run_stage(stage, config, root=root, force=force) for stage in STAGE_NAMES}
+    stages = (
+        STAGE_NAMES
+        if config["task"]["name"] == "knapsack"
+        else tuple(stage for stage in STAGE_NAMES if stage != "solve-references")
+    )
+    return {stage: run_stage(stage, config, root=root, force=force) for stage in stages}

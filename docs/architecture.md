@@ -1,6 +1,6 @@
 # Architecture
 
-Phase 0のPython 3.11/src layout、uv、Hydra、CLI、CIとPhase 1の決定的ID、PyArrow schema、Parquet/Zarr I/O、DuckDB view、validationを維持する。Phase 2はCPU専用のdummy pilotだけを追加する。研究結論を出す実験ではない。
+Phase 0のPython 3.11/src layout、uv、Hydra、CLI、CI、Phase 1の保存・検証API、Phase 2のCPU dummy pilotを維持する。Phase 3は0-1ナップサックと独立したOR-Tools CP-SAT参照solverを追加する。どちらのpilotも研究結論を出す実験ではない。
 
 `configs/config.yaml`が設定合成の入口であり、experiment、task、llm（mock識別）、generation、observation、state_model、dynamics、evaluation、storage、trackingを分類する。Phase 2で実装したgroupのみ`implemented: true`とする。storageはrepository-relativeなraw、interim、derived、artifact、Parquet、Zarr pathを定義し、trackingはlocal file URIを定義する。秘密情報は設定・provenanceに含めない。
 
@@ -29,4 +29,14 @@ DuckDBはin-memory connection上のviewだけを作り、Parquetを複製しな�
 
 MLflowはlocal file storeにrun・parameter・metric・tag・artifactを記録し、derived Parquet/JSON/CSVから再集計できる。DVCは生成データcacheとstage依存関係を管理し、Gitはコード・設定・DVC metadataを管理する。`dvc.yaml`内のpathはHydra storage既定値への投影であり、既定path変更時は両方更新する。個別CLIのpath overrideはDVC graphを変更しない。詳細は[ADR-006](adr/ADR-006-git-dvc-mlflow-responsibilities.md)を参照する。
 
-仕様書の完全pipelineのsolve_referencesとtune_model、実問題、LLM adapter、内部観測、Optuna、nested CV、本評価はPhase 3以降に残す。詳細は[リポジトリ仕様書](repository-specification.md)を正本とする。
+## Phase 3: knapsack reference pipeline
+
+`configs/config.yaml`の既定はknapsack pilotで、solver groupを追加した。ルートの`dvc.yaml`はPhase 3の9 stageを持つ。Phase 2 dummy回帰はHydra override付きCLIと自動テストで維持し、追加のルート階層やDVC graphは作らない。solve_referencesはinstancesとtask/solver設定から`reference_solutions.parquet`を作る。collect以降はこの参照表に明示的に依存する。solver設定だけの変更はsolve_references以降、instance生成条件の変更はgenerate_instances以降、report体裁だけの変更はbuild_reportを再実行する。DVCの固定pathはHydra storageの既定pathを投影したもので、CLIのpath overrideはDVC graphへ反映されない。
+
+`data/raw/knapsack_pilot/`はPhase 1の4表、Zarrと任意拡張表`reference_solutions.parquet`を同居させた単一snapshotである。knapsackと判定した場合だけ参照表を必須とし、dummyの4表/Zarr snapshotはそのまま受理する。raw metricsは空schema、実評価値はderivedに置く。Zarrは選択中item vectorの`external_state`を保存し、LLM内部状態を偽造しない。参照とtrialは`instance_id`、trialとcheckpointは`trial_id`で結合する。
+
+Taskは目的の向き、改善、参照値に対するsuccess、状態復元を定義する。solverはTaskと独立してstatus、best feasible value、best bound、証明済みoptimal value、gap、solutionをimmutable結果として返す。mock generatorは参照解のaction列を受け取らず、合法actionと現在の目的値だけで探索する。参照はsuccess/gap/評価にのみ使用し、solver解はTaskでfeasibilityと目的値を再計算する。[ADR-008](adr/ADR-008-ortools-solver-abstraction.md)に数値の定義を記す。
+
+ナップサックの特徴は現在の外部stateと証明済み参照に対するgapである。`objective_gap` state modelは事前固定binを使い、fitはtrainの証明済みinstanceだけに制限する。未証明instanceを0へ変換しない。testはfit metadataと交差しないことを評価前に確認する。問題固有のtest指標はtrial、instance、checkpointの単位を分け、timeoutや未証明をsolver率の母数に残す。真のgapだけは証明済み参照に限定する。
+
+仕様書の完全pipelineの`tune_model`、LLM adapter、prompt versioning、内部観測、Optuna、nested CV、本評価はPhase 4以降に残す。詳細は[リポジトリ仕様書](repository-specification.md)を正本とする。
