@@ -14,6 +14,7 @@ from typing import Any
 
 import numpy as np
 import pyarrow as pa
+import pyarrow.parquet as pq
 
 from llm_search_dynamics.config import repository_root
 from llm_search_dynamics.data.parquet import read_parquet, write_parquet
@@ -26,15 +27,24 @@ from llm_search_dynamics.data.zarr import ObservationArray, write_observation_st
 from llm_search_dynamics.dynamics.transition import MarkovTransitionModel
 from llm_search_dynamics.evaluation.knapsack import evaluate_knapsack
 from llm_search_dynamics.evaluation.metrics import evaluate_trajectories
+from llm_search_dynamics.evaluation.success_features import run_feature_selection
 from llm_search_dynamics.features.external import extract_external_features
-from llm_search_dynamics.generation.mock import (
-    GENERATOR_REVISION,
-    MockGenerator,
-    generator_name,
+from llm_search_dynamics.features.success import (
+    build_instance_feature_rows,
+    build_success_feature_rows,
 )
-from llm_search_dynamics.identifiers import canonical_json, experiment_id, instance_id
+from llm_search_dynamics.identifiers import (
+    canonical_json,
+    checkpoint_id,
+    experiment_id,
+    instance_id,
+    trial_id,
+)
 from llm_search_dynamics.provenance import collect_provenance, config_hash
 from llm_search_dynamics.reporting.tables import build_pilot_report
+from llm_search_dynamics.search.base import BudgetedEvaluator
+from llm_search_dynamics.search.initialization import make_initial_state
+from llm_search_dynamics.search.registry import get_search_algorithms
 from llm_search_dynamics.solvers.base import SolverParameters, SolverResult, SolverStatus
 from llm_search_dynamics.solvers.registry import get_solver
 from llm_search_dynamics.state_models.registry import get_state_model, load_state_model
@@ -111,6 +121,16 @@ def _outputs(paths: PilotPaths, stage: str, config: dict[str, Any]) -> list[Path
         "prepare": [paths.interim / "trajectories.json"],
         "extract": [paths.derived / "features.json"],
         "split": [paths.derived / "splits.json"],
+        "analyze-success": [
+            paths.derived / "success_features.parquet",
+            paths.derived / "instance_features.parquet",
+            paths.derived / "success_predictions.parquet",
+            paths.artifacts / "success_feature_models.json",
+            paths.artifacts / "success_feature_selection.json",
+            paths.artifacts / "success_feature_comparison.json",
+            paths.artifacts / "success_feature_comparison.md",
+            paths.artifacts / "success_analysis_config.json",
+        ],
         "fit": [
             paths.artifacts / "state_model.json",
             paths.artifacts / "dynamics_model.json",
@@ -166,9 +186,19 @@ def _task(config: dict[str, Any]) -> Any:
         for key, value in config["task"].items()
         if key not in {"name", "version", "implemented"}
     }
-    return get_task(
-        config["task"]["name"], max_steps=int(config["generation"]["max_steps"]), **params
-    )
+    return get_task(config["task"]["name"], max_steps=_configured_budget_limit(config), **params)
+
+
+def _configured_budget_limit(config: dict[str, Any]) -> int:
+    configured = config["search"].get("budget_limit")
+    if configured is not None:
+        limit = int(configured)
+    else:
+        size = int(config["task"].get("item_count", config["task"].get("bit_count", 1)))
+        limit = int(config["search"]["budget_multiplier"]) * size
+    if limit <= 0:
+        raise ValueError("search budget_limit must be positive")
+    return limit
 
 
 def _instance_from_row(task: Any, row: dict[str, Any]) -> BinaryInstance | KnapsackInstance:
@@ -195,8 +225,8 @@ def _solver_parameters(config: dict[str, Any]) -> SolverParameters:
 def _conditions(config: dict[str, Any]) -> dict[str, Any]:
     return {
         "task": config["task"],
-        "generator": config["generation"],
-        "mock_identity": config["llm"],
+        "search": config["search"],
+        "search_method": config["search_method"],
         "experiment_name": config["experiment"]["name"],
     }
 
@@ -290,20 +320,19 @@ def _reference_rows(paths: PilotPaths) -> dict[str, dict[str, Any]]:
 def _collect(config: dict[str, Any], paths: PilotPaths) -> None:
     task = _task(config)
     instances = read_parquet(paths.raw / "instances.parquet", "instances").to_pylist()
-    generator = MockGenerator(
-        greedy_probability=float(config["generation"]["greedy_probability"]),
-        max_steps=int(config["generation"]["max_steps"]),
-    )
+    algorithms = get_search_algorithms(config["search_method"])
+    budget_limit = _configured_budget_limit(config)
     conditions = _conditions(config)
     exp_id = experiment_id(config["experiment"]["name"], conditions)
     trials: list[dict[str, Any]] = []
     checkpoints: list[dict[str, Any]] = []
     bits: list[list[int]] = []
     references = _reference_rows(paths) if task.name == "knapsack" else {}
-    seed_base = int(config["experiment"]["seed"]["llm_sampling"])
-    trial_count = int(config["generation"]["trials"])
+    search_seed_base = int(config["experiment"]["seed"]["search"])
+    initial_seed_base = int(config["experiment"]["seed"]["initial_state"])
+    trial_count = int(config["search"]["trials"])
     if trial_count < 1:
-        raise ValueError("generation.trials must be positive")
+        raise ValueError("search.trials must be positive")
     for instance_index, row in enumerate(instances):
         instance = _instance_from_row(task, row)
         reference = references.get(row["instance_id"])
@@ -313,63 +342,92 @@ def _collect(config: dict[str, Any], paths: PilotPaths) -> None:
             reference["optimal_value"] if reference and reference["optimality_proven"] else None
         )
         for trial_index in range(trial_count):
-            sampling_seed = seed_base + instance_index * trial_count + trial_index
-            generated = generator.generate(
+            offset = instance_index * trial_count + trial_index
+            search_seed = search_seed_base + offset
+            initial_seed = initial_seed_base + offset
+            initial_state = make_initial_state(
                 task=task,
                 instance=instance,
-                source_instance_id=row["instance_id"],
-                experiment_conditions=conditions,
-                sampling_seed=sampling_seed,
-                reference_value=optimal,
+                seed=initial_seed,
+                strategy=str(config["search"]["initial_state"]["strategy"]),
+                include_probability=float(config["search"]["initial_state"]["include_probability"]),
             )
-            trials.append(
-                {
-                    "schema_version": SCHEMA_VERSION,
-                    "trial_id": generated.trial_id,
-                    "instance_id": row["instance_id"],
-                    "experiment_id": exp_id,
-                    "llm_name": generator_name(task.name),
-                    "llm_revision": GENERATOR_REVISION,
-                    "sampling_seed": sampling_seed,
-                    "temperature": float(config["generation"]["temperature"]),
-                    "max_new_tokens": generator.max_steps,
-                    "terminal_class": generated.terminal_class,
-                    "success": generated.success,
-                    "runtime_seconds": generated.runtime_seconds,
-                    "status": generated.status,
-                    "error_type": generated.error_type,
+            for algorithm in algorithms:
+                evaluator = BudgetedEvaluator(task=task, budget_limit=budget_limit)
+                result = algorithm.run(
+                    task=task,
+                    initial_state=initial_state,
+                    evaluator=evaluator,
+                    search_seed=search_seed,
+                    reference_value=optimal,
+                )
+                method_conditions = {
+                    **conditions,
+                    "active_search_method": {
+                        "name": algorithm.name,
+                        "revision": algorithm.revision,
+                        "parameters": algorithm.parameters(),
+                    },
                 }
-            )
-            for point in generated.checkpoints:
-                if not task.is_feasible(point.state):
-                    raise ValueError(f"Mock checkpoint is infeasible: {point.checkpoint_id}")
-                checkpoints.append(
+                identifier = trial_id(row["instance_id"], method_conditions, search_seed)
+                trials.append(
                     {
                         "schema_version": SCHEMA_VERSION,
-                        "checkpoint_id": point.checkpoint_id,
-                        "trial_id": generated.trial_id,
-                        "generated_token_index": point.generated_token_index,
-                        "checkpoint_index": point.checkpoint_index,
-                        "state_json": canonical_json(task.serialize_state(point.state)),
-                        "objective_value": point.objective,
-                        "optimality_gap": task.objective_gap(
-                            point.objective,
-                            optimal,
-                            epsilon=float(config["solver"]["relative_gap_epsilon"]),
-                        )
-                        if optimal is not None
-                        else None,
-                        "remaining_budget": point.remaining_budget,
-                        "is_terminal": point.is_terminal,
-                        "parse_status": "parsed",
-                        "tensor_ref": None,
+                        "trial_id": identifier,
+                        "instance_id": row["instance_id"],
+                        "experiment_id": exp_id,
+                        "search_method_name": algorithm.name,
+                        "search_method_revision": algorithm.revision,
+                        "search_seed": search_seed,
+                        "budget_type": str(config["search"]["budget_type"]),
+                        "budget_limit": budget_limit,
+                        "search_parameters_json": canonical_json(algorithm.parameters()),
+                        "initial_state_json": canonical_json(task.serialize_state(initial_state)),
+                        "terminal_class": result.terminal_class,
+                        "success": result.success,
+                        "runtime_seconds": result.runtime_seconds,
+                        "status": result.status,
+                        "error_type": result.error_type,
                     }
                 )
-                bits.append(
-                    list(point.state.selected)
-                    if task.name == "knapsack"
-                    else list(point.state.bits)
-                )
+                for point in result.checkpoints:
+                    if not task.is_feasible(point.state):
+                        raise ValueError(f"Search checkpoint is infeasible in trial {identifier}")
+                    point_id = checkpoint_id(identifier, point.checkpoint_index)
+                    checkpoints.append(
+                        {
+                            "schema_version": SCHEMA_VERSION,
+                            "checkpoint_id": point_id,
+                            "trial_id": identifier,
+                            "budget_used": point.budget_used,
+                            "checkpoint_index": point.checkpoint_index,
+                            "decision_step": point.decision_step,
+                            "accepted_moves": point.accepted_moves,
+                            "rejected_moves": point.rejected_moves,
+                            "action_json": canonical_json(
+                                {"bit_index": point.action, "accepted": point.action_accepted}
+                            )
+                            if point.action is not None
+                            else None,
+                            "state_json": canonical_json(task.serialize_state(point.state)),
+                            "objective_value": point.objective,
+                            "optimality_gap": task.objective_gap(
+                                point.objective,
+                                optimal,
+                                epsilon=float(config["solver"]["relative_gap_epsilon"]),
+                            )
+                            if optimal is not None
+                            else None,
+                            "remaining_budget": point.remaining_budget,
+                            "is_terminal": point.is_terminal,
+                            "tensor_ref": None,
+                        }
+                    )
+                    bits.append(
+                        list(point.state.selected)
+                        if task.name == "knapsack"
+                        else list(point.state.bits)
+                    )
 
     write_parquet(_table("trials", trials), paths.raw / "trials.parquet", "trials")
     write_parquet(
@@ -387,15 +445,16 @@ def _collect(config: dict[str, Any], paths: PilotPaths) -> None:
         },
         trial_ids=[row["trial_id"] for row in checkpoints],
         checkpoint_ids=[row["checkpoint_id"] for row in checkpoints],
-        generated_token_indices=[row["generated_token_index"] for row in checkpoints],
+        budget_used=[row["budget_used"] for row in checkpoints],
+        search_method_revision=str(config["search_method"]["revision"]),
         observation_code_version=str(config["observation"]["code_version"]),
         observation_metadata={
-            "source": "mock",
+            "source": "classical_search",
             "observation_kind": "external-only",
             "task_name": task.name,
         }
         if task.name == "knapsack"
-        else {"source": "mock", "observation_kind": "external-only"},
+        else {"source": "classical_search", "observation_kind": "external-only"},
     )
     # Last output completes the four-table Phase 1 dataset snapshot.
     write_parquet(empty_table("metrics"), paths.raw / "metrics.parquet", "metrics")
@@ -457,6 +516,123 @@ def _split(config: dict[str, Any], paths: PilotPaths) -> None:
         ratios=config["evaluation"]["split_ratios"],
     )
     write_split(paths.derived / "splits.json", split)
+
+
+def _write_analysis_parquet(path: Path, rows: list[dict[str, Any]], analysis_version: str) -> None:
+    if not rows:
+        raise ValueError(f"Analysis table cannot be empty: {path.name}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    table = pa.Table.from_pylist(rows).replace_schema_metadata(
+        {b"analysis_version": analysis_version.encode("ascii")}
+    )
+    pq.write_table(table, path, compression="zstd")
+
+
+def _analyze_success(config: dict[str, Any], paths: PilotPaths) -> None:
+    if config["task"]["name"] != "knapsack":
+        raise ValueError("B2/M2/M3 success analysis is implemented only for knapsack")
+    split = read_split(paths.derived / "splits.json")
+    instances = read_parquet(paths.raw / "instances.parquet", "instances").to_pylist()
+    trials = read_parquet(paths.raw / "trials.parquet", "trials").to_pylist()
+    checkpoints = read_parquet(paths.raw / "checkpoints.parquet", "checkpoints").to_pylist()
+    references = list(_reference_rows(paths).values())
+    feature_config = config["features"]
+    analysis_version = str(feature_config["analysis_version"])
+    epsilon = float(feature_config["normalization_epsilon"])
+    sample_config = feature_config["instance_sampling"]
+    feature_rows = build_success_feature_rows(
+        instances=instances,
+        trials=trials,
+        checkpoints=checkpoints,
+        references=references,
+        assignments=split.assignments,
+        history_window_budget=int(feature_config["history_window_budget"]),
+        epsilon=epsilon,
+        distance_seed=int(sample_config["seed"]),
+    )
+    instance_rows = build_instance_feature_rows(
+        instances=instances,
+        references=references,
+        sample_seed=int(sample_config["seed"]),
+        sample_count=int(sample_config["sample_count"]),
+        random_walk_steps=int(sample_config["random_walk_steps"]),
+        epsilon=epsilon,
+    )
+    for row in (*feature_rows, *instance_rows):
+        row["analysis_version"] = analysis_version
+    settings = {
+        **config["evaluation"]["success_prediction"],
+        "probability_floor": config["evaluation"]["probability_floor"],
+    }
+    models, selection, comparison, predictions = run_feature_selection(
+        feature_rows,
+        settings=settings,
+        bootstrap_seed=int(config["experiment"]["seed"]["bootstrap"]),
+    )
+    for row in predictions:
+        row["analysis_version"] = analysis_version
+    _write_analysis_parquet(
+        paths.derived / "success_features.parquet", feature_rows, analysis_version
+    )
+    _write_analysis_parquet(
+        paths.derived / "instance_features.parquet", instance_rows, analysis_version
+    )
+    _write_analysis_parquet(
+        paths.derived / "success_predictions.parquet", predictions, analysis_version
+    )
+    metadata = {
+        "analysis_version": analysis_version,
+        "split_hash": split.split_hash,
+        "fit_split": "train",
+        "selection_split": "validation",
+        "test_final_evaluation_only": True,
+    }
+    _write_json(paths.artifacts / "success_feature_models.json", {**metadata, "models": models})
+    _write_json(
+        paths.artifacts / "success_feature_selection.json", {**metadata, "selection": selection}
+    )
+    _write_json(
+        paths.artifacts / "success_feature_comparison.json",
+        {**metadata, "comparison": comparison},
+    )
+    _write_json(
+        paths.artifacts / "success_analysis_config.json",
+        {
+            "analysis_version": analysis_version,
+            "features": feature_config,
+            "evaluation": settings,
+            "experiment_seeds": config["experiment"]["seed"],
+        },
+    )
+    lines = [
+        "# B2・M2・M3 success prediction",
+        "",
+        "Feature selection used train/validation only. Test was evaluated once after freezing the configuration.",
+        "",
+        "| Search method | Selected features | B2 Brier | Final Brier | Improvement | 95% CI |",
+        "|---|---|---:|---:|---:|---:|",
+    ]
+    for method, result in comparison.items():
+        baseline = result["models"]["B2"]["test_metrics"]["brier"]
+        final = result["models"]["selected_final"]["test_metrics"]["brier"]
+        paired = result["paired_vs_B2"]
+        chosen = selection[method]["selected_final_features"]
+        lines.append(
+            f"| {method} | {', '.join(chosen)} | {baseline:.6f} | {final:.6f} | "
+            f"{paired['brier_improvement']:.6f} | "
+            f"[{paired['ci_lower']:.6f}, {paired['ci_upper']:.6f}] |"
+        )
+    lines.extend(
+        [
+            "",
+            "Positive improvement means a lower instance-macro Brier score than B2.",
+            "Predictive improvement is not interpreted as a causal effect.",
+            "",
+        ]
+    )
+    report = paths.artifacts / "success_feature_comparison.md"
+    report.parent.mkdir(parents=True, exist_ok=True)
+    report.write_text("\n".join(lines), encoding="utf-8")
 
 
 def _trajectories_from_states(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -610,8 +786,8 @@ def _evaluate(config: dict[str, Any], paths: PilotPaths) -> None:
         "task_name": config["task"]["name"],
         "task_version": str(config["task"]["version"]),
         "split_hash": split.split_hash,
-        "generator_name": generator_name(config["task"]["name"]),
-        "generator_revision": GENERATOR_REVISION,
+        "search_method_name": str(config["search_method"]["name"]),
+        "search_method_revision": str(config["search_method"]["revision"]),
         "dvc_revision": provenance["dvc_revision"],
     }
     if problem is not None:
@@ -732,7 +908,9 @@ def _report(config: dict[str, Any], paths: PilotPaths) -> None:
         "run_id": run["run_id"],
         "config_hash": summary["config_hash"],
         "task": f"{config['task']['name']}@{config['task']['version']}",
-        "generator": f"{generator_name(config['task']['name'])}@{GENERATOR_REVISION}",
+        "search_method": (
+            f"{config['search_method']['name']}@{config['search_method']['revision']}"
+        ),
         "instances": instances.num_rows,
         "trials": len(trials),
         "checkpoints": len(checkpoints),
@@ -816,6 +994,7 @@ STAGE_NAMES = (
     "prepare",
     "extract",
     "split",
+    "analyze-success",
     "fit",
     "evaluate",
     "report",
@@ -872,6 +1051,8 @@ def run_stage(
         _extract(paths)
     elif stage == "split":
         _split(config, paths)
+    elif stage == "analyze-success":
+        _analyze_success(config, paths)
     elif stage == "fit":
         _fit(config, paths)
     elif stage == "evaluate":
@@ -888,6 +1069,8 @@ def reproduce_pilot(
     stages = (
         STAGE_NAMES
         if config["task"]["name"] == "knapsack"
-        else tuple(stage for stage in STAGE_NAMES if stage != "solve-references")
+        else tuple(
+            stage for stage in STAGE_NAMES if stage not in {"solve-references", "analyze-success"}
+        )
     )
     return {stage: run_stage(stage, config, root=root, force=force) for stage in stages}

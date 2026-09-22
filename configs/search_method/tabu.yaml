@@ -1,0 +1,7 @@
+name: short_term_tabu
+revision: "1"
+implemented: true
+tenure: 3
+aspiration: global_best
+long_term_memory: false
+restart: false

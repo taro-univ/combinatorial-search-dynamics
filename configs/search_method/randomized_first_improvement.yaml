@@ -1,0 +1,5 @@
+name: randomized_first_improvement
+revision: "1"
+implemented: true
+accept_equal: false
+restart: false

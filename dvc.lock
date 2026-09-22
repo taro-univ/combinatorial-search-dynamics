@@ -5,12 +5,12 @@ stages:
     deps:
     - path: configs/config.yaml
       hash: md5
-      md5: efe0cfbe49ccb7f015eceebca9efe66a
-      size: 329
+      md5: a120c3636fa22eb670bbd7897d89b56a
+      size: 362
     - path: configs/experiment/knapsack_pilot.yaml
       hash: md5
-      md5: c581cb5d42635e84a431d5ab0cb73de4
-      size: 291
+      md5: f1e910f27058556b227e6398e8fada13
+      size: 307
     - path: configs/storage/knapsack_local.yaml
       hash: md5
       md5: fb01f68901b8fff1f6c5e6450f6b8389
@@ -21,12 +21,12 @@ stages:
       size: 135
     - path: src/llm_search_dynamics/identifiers.py
       hash: md5
-      md5: 005b980db0c72b6594ac05d90c2b94df
-      size: 3904
+      md5: 35b12102eb86849ada17cbb7f20e3d55
+      size: 3860
     - path: src/llm_search_dynamics/pipeline/stages.py
       hash: md5
-      md5: d7417078ae9d383343192dd6fbb989b2
-      size: 37381
+      md5: 9803b5e677ddb9e09ea9450709b6a08c
+      size: 39222
     - path: src/llm_search_dynamics/tasks/knapsack.py
       hash: md5
       md5: 2f5c95b4ae811417b8c50e42b31f830e
@@ -38,27 +38,39 @@ stages:
     outs:
     - path: data/raw/knapsack_pilot/instances.parquet
       hash: md5
-      md5: 751cef5dc5ddbe8172eb329c8182fe59
+      md5: 6d7c3d0f89f56d5dc3c506e4ccf88618
       size: 4173
   collect_trajectories:
     cmd: uv run lsd collect --force
     deps:
+    - path: configs/config.yaml
+      hash: md5
+      md5: a120c3636fa22eb670bbd7897d89b56a
+      size: 362
     - path: configs/experiment/knapsack_pilot.yaml
       hash: md5
-      md5: c581cb5d42635e84a431d5ab0cb73de4
-      size: 291
-    - path: configs/generation/mock.yaml
-      hash: md5
-      md5: 0c205199a27e08dad20af65b57dce1c1
-      size: 183
-    - path: configs/llm/mock.yaml
-      hash: md5
-      md5: 29c73aa6e0f9de457c08e8e0f59e50ac
-      size: 75
+      md5: f1e910f27058556b227e6398e8fada13
+      size: 307
     - path: configs/observation/external_only.yaml
       hash: md5
       md5: 23bfcc62983b9042b253b58004bf30fa
       size: 56
+    - path: configs/search/default.yaml
+      hash: md5
+      md5: 376d194d4f8f3946748a403a87467655
+      size: 273
+    - path: configs/search_method/randomized_first_improvement.yaml
+      hash: md5
+      md5: a20252d2aa0e4cf1d69a92ed048a6cc0
+      size: 102
+    - path: configs/search_method/simulated_annealing.yaml
+      hash: md5
+      md5: 15a8972fcfdb73ed1df0753c16976f5c
+      size: 226
+    - path: configs/search_method/tabu.yaml
+      hash: md5
+      md5: b08c615751a68e0007ce12ed771ee0e4
+      size: 127
     - path: configs/storage/knapsack_local.yaml
       hash: md5
       md5: fb01f68901b8fff1f6c5e6450f6b8389
@@ -69,79 +81,107 @@ stages:
       size: 135
     - path: data/raw/knapsack_pilot/instances.parquet
       hash: md5
-      md5: 751cef5dc5ddbe8172eb329c8182fe59
+      md5: 6d7c3d0f89f56d5dc3c506e4ccf88618
       size: 4173
     - path: data/raw/knapsack_pilot/reference_solutions.parquet
       hash: md5
-      md5: 3559f63ade8be482d7b8d1e7e1d7f259
-      size: 7514
+      md5: c95a071153426f0260e0f7928ebc706c
+      size: 7506
+    - path: src/llm_search_dynamics/data/parquet.py
+      hash: md5
+      md5: a440d4335ed39c69007f25ba46e7e837
+      size: 2166
+    - path: src/llm_search_dynamics/data/schemas.py
+      hash: md5
+      md5: b37785c299b4995afe3307113b8cee15
+      size: 10948
     - path: src/llm_search_dynamics/data/zarr.py
       hash: md5
-      md5: 4a8267d9845145bc472a738e4142ffbb
-      size: 12975
-    - path: src/llm_search_dynamics/generation/mock.py
+      md5: 659d5568a23bc6a39583185acbe64897
+      size: 13490
+    - path: src/llm_search_dynamics/pipeline/stages.py
       hash: md5
-      md5: 5668f630bd67073bf6209656b8a6e15c
-      size: 4992
+      md5: 9803b5e677ddb9e09ea9450709b6a08c
+      size: 39222
+    - path: src/llm_search_dynamics/search/algorithms.py
+      hash: md5
+      md5: 84894c16d4b0ec293dc9d341b2d21605
+      size: 11236
+    - path: src/llm_search_dynamics/search/base.py
+      hash: md5
+      md5: 171fdfe7e6666641c9a1bc83e996c5aa
+      size: 2629
+    - path: src/llm_search_dynamics/search/initialization.py
+      hash: md5
+      md5: 2d7aa5492c379aebee543002fe6acabb
+      size: 1579
+    - path: src/llm_search_dynamics/search/registry.py
+      hash: md5
+      md5: 39688a2bbb279a23c4ede6164d89a197
+      size: 797
     outs:
     - path: data/raw/knapsack_pilot/checkpoints.parquet
       hash: md5
-      md5: 41ba2627ec97b82adc510d56f32078d9
-      size: 8417
+      md5: 931719e41613291f7a6e4e13507ef3f0
+      size: 7520
     - path: data/raw/knapsack_pilot/metrics.parquet
       hash: md5
-      md5: 4f97b2dd5e8bcfe035202e6e2e6b8dbb
+      md5: 685ba4e2797c2840e295c014f3874656
       size: 1677
     - path: data/raw/knapsack_pilot/observations.zarr
       hash: md5
-      md5: 1268f10310abe1b3d8fa3c7f1f5b3b67.dir
-      size: 6497
-      nfiles: 15
+      md5: 1ff7be59f7cdfe34a538b05600df2ede.dir
+      size: 5375
+      nfiles: 13
     - path: data/raw/knapsack_pilot/trials.parquet
       hash: md5
-      md5: 066b335a41abe27f4e17ce16fc11e804
-      size: 5326
+      md5: ed6c2589723062b4acb86306c29d9a90
+      size: 7203
   prepare_trajectories:
     cmd: uv run lsd prepare --force
     deps:
     - path: data/raw/knapsack_pilot/checkpoints.parquet
       hash: md5
-      md5: 41ba2627ec97b82adc510d56f32078d9
-      size: 8417
+      md5: 931719e41613291f7a6e4e13507ef3f0
+      size: 7520
     - path: data/raw/knapsack_pilot/instances.parquet
       hash: md5
-      md5: 751cef5dc5ddbe8172eb329c8182fe59
+      md5: 6d7c3d0f89f56d5dc3c506e4ccf88618
       size: 4173
     - path: data/raw/knapsack_pilot/metrics.parquet
       hash: md5
-      md5: 4f97b2dd5e8bcfe035202e6e2e6b8dbb
+      md5: 685ba4e2797c2840e295c014f3874656
       size: 1677
     - path: data/raw/knapsack_pilot/observations.zarr
       hash: md5
-      md5: 1268f10310abe1b3d8fa3c7f1f5b3b67.dir
-      size: 6497
-      nfiles: 15
+      md5: 1ff7be59f7cdfe34a538b05600df2ede.dir
+      size: 5375
+      nfiles: 13
     - path: data/raw/knapsack_pilot/reference_solutions.parquet
       hash: md5
-      md5: 3559f63ade8be482d7b8d1e7e1d7f259
-      size: 7514
+      md5: c95a071153426f0260e0f7928ebc706c
+      size: 7506
     - path: data/raw/knapsack_pilot/trials.parquet
       hash: md5
-      md5: 066b335a41abe27f4e17ce16fc11e804
-      size: 5326
+      md5: ed6c2589723062b4acb86306c29d9a90
+      size: 7203
     - path: src/llm_search_dynamics/data/reference_validation.py
       hash: md5
-      md5: a85112619d1ea6003f57bda4d2f82b4a
-      size: 17654
+      md5: 52376b95a28347664c9966d1d5466192
+      size: 18639
     - path: src/llm_search_dynamics/data/validation.py
       hash: md5
-      md5: f67b409c203a8368cb0648ddeb84e690
-      size: 13231
+      md5: 8a47ba3ed3223de8e22e54ce8ea538d9
+      size: 15375
+    - path: src/llm_search_dynamics/pipeline/stages.py
+      hash: md5
+      md5: 9803b5e677ddb9e09ea9450709b6a08c
+      size: 39222
     outs:
     - path: data/interim/knapsack_pilot/trajectories.json
       hash: md5
-      md5: fa38944998f0486fb050e337726e1bb1
-      size: 90350
+      md5: ba8a41c378702aa5db537a98e6f4d140
+      size: 35520
   extract_features:
     cmd: uv run lsd extract --force
     deps:
@@ -151,21 +191,25 @@ stages:
       size: 56
     - path: data/interim/knapsack_pilot/trajectories.json
       hash: md5
-      md5: fa38944998f0486fb050e337726e1bb1
-      size: 90350
+      md5: ba8a41c378702aa5db537a98e6f4d140
+      size: 35520
     - path: data/raw/knapsack_pilot/reference_solutions.parquet
       hash: md5
-      md5: 3559f63ade8be482d7b8d1e7e1d7f259
-      size: 7514
+      md5: c95a071153426f0260e0f7928ebc706c
+      size: 7506
     - path: src/llm_search_dynamics/features/external.py
       hash: md5
       md5: 14ad0445cbf4f231bfdd05b5103b7d0a
       size: 2327
+    - path: src/llm_search_dynamics/pipeline/stages.py
+      hash: md5
+      md5: 9803b5e677ddb9e09ea9450709b6a08c
+      size: 39222
     outs:
     - path: data/derived/knapsack_pilot/features.json
       hash: md5
-      md5: 7e2186290ed31e9403b3b4fca8f45595
-      size: 37088
+      md5: 3a7ec61003f506d567d5a3265cebbc05
+      size: 14049
   make_splits:
     cmd: uv run lsd split --force
     deps:
@@ -175,20 +219,24 @@ stages:
       size: 203
     - path: configs/experiment/knapsack_pilot.yaml
       hash: md5
-      md5: c581cb5d42635e84a431d5ab0cb73de4
-      size: 291
+      md5: f1e910f27058556b227e6398e8fada13
+      size: 307
     - path: data/derived/knapsack_pilot/features.json
       hash: md5
-      md5: 7e2186290ed31e9403b3b4fca8f45595
-      size: 37088
+      md5: 3a7ec61003f506d567d5a3265cebbc05
+      size: 14049
     - path: data/raw/knapsack_pilot/instances.parquet
       hash: md5
-      md5: 751cef5dc5ddbe8172eb329c8182fe59
+      md5: 6d7c3d0f89f56d5dc3c506e4ccf88618
       size: 4173
     - path: src/llm_search_dynamics/data/splits.py
       hash: md5
       md5: e0263afc940f46e305698d88bfc89be8
       size: 5128
+    - path: src/llm_search_dynamics/pipeline/stages.py
+      hash: md5
+      md5: 9803b5e677ddb9e09ea9450709b6a08c
+      size: 39222
     outs:
     - path: data/derived/knapsack_pilot/splits.json
       hash: md5
@@ -207,20 +255,24 @@ stages:
       size: 167
     - path: data/derived/knapsack_pilot/features.json
       hash: md5
-      md5: 7e2186290ed31e9403b3b4fca8f45595
-      size: 37088
+      md5: 3a7ec61003f506d567d5a3265cebbc05
+      size: 14049
     - path: data/derived/knapsack_pilot/splits.json
       hash: md5
       md5: 11bd3a9c0f3c6bcc39de293e24de8163
       size: 633
     - path: data/raw/knapsack_pilot/reference_solutions.parquet
       hash: md5
-      md5: 3559f63ade8be482d7b8d1e7e1d7f259
-      size: 7514
+      md5: c95a071153426f0260e0f7928ebc706c
+      size: 7506
     - path: src/llm_search_dynamics/dynamics/transition.py
       hash: md5
       md5: 5d425c4f6af8e205aaebb97630a7c51e
       size: 5831
+    - path: src/llm_search_dynamics/pipeline/stages.py
+      hash: md5
+      md5: 9803b5e677ddb9e09ea9450709b6a08c
+      size: 39222
     - path: src/llm_search_dynamics/state_models/objective_gap.py
       hash: md5
       md5: 95caf6b9a61cdecce3bb1abb47ddc27a
@@ -232,23 +284,23 @@ stages:
     outs:
     - path: artifacts/knapsack_pilot/dynamics_model.json
       hash: md5
-      md5: a69534db04fbc5c2a8a35f9d16b83657
-      size: 1413
+      md5: cf3ac39a81f96294cbdcfef4eea7d7b7
+      size: 1246
     - path: artifacts/knapsack_pilot/state_model.json
       hash: md5
       md5: 3f3782864a6a9465b8e015ab7a14b22e
       size: 536
     - path: data/derived/knapsack_pilot/state_assignments.json
       hash: md5
-      md5: 251dc5f2787a092d6eb677897b1f6488
-      size: 39763
+      md5: f1e9c06b9bdc79702ae0b55da6c4dff4
+      size: 15049
   evaluate_model:
     cmd: uv run lsd evaluate --force
     deps:
     - path: artifacts/knapsack_pilot/dynamics_model.json
       hash: md5
-      md5: a69534db04fbc5c2a8a35f9d16b83657
-      size: 1413
+      md5: cf3ac39a81f96294cbdcfef4eea7d7b7
+      size: 1246
     - path: artifacts/knapsack_pilot/state_model.json
       hash: md5
       md5: 3f3782864a6a9465b8e015ab7a14b22e
@@ -267,45 +319,49 @@ stages:
       size: 633
     - path: data/derived/knapsack_pilot/state_assignments.json
       hash: md5
-      md5: 251dc5f2787a092d6eb677897b1f6488
-      size: 39763
+      md5: f1e9c06b9bdc79702ae0b55da6c4dff4
+      size: 15049
     - path: data/raw/knapsack_pilot/checkpoints.parquet
       hash: md5
-      md5: 41ba2627ec97b82adc510d56f32078d9
-      size: 8417
+      md5: 931719e41613291f7a6e4e13507ef3f0
+      size: 7520
     - path: data/raw/knapsack_pilot/instances.parquet
       hash: md5
-      md5: 751cef5dc5ddbe8172eb329c8182fe59
+      md5: 6d7c3d0f89f56d5dc3c506e4ccf88618
       size: 4173
     - path: data/raw/knapsack_pilot/metrics.parquet
       hash: md5
-      md5: 4f97b2dd5e8bcfe035202e6e2e6b8dbb
+      md5: 685ba4e2797c2840e295c014f3874656
       size: 1677
     - path: data/raw/knapsack_pilot/observations.zarr
       hash: md5
-      md5: 1268f10310abe1b3d8fa3c7f1f5b3b67.dir
-      size: 6497
-      nfiles: 15
+      md5: 1ff7be59f7cdfe34a538b05600df2ede.dir
+      size: 5375
+      nfiles: 13
     - path: data/raw/knapsack_pilot/reference_solutions.parquet
       hash: md5
-      md5: 3559f63ade8be482d7b8d1e7e1d7f259
-      size: 7514
+      md5: c95a071153426f0260e0f7928ebc706c
+      size: 7506
     - path: data/raw/knapsack_pilot/trials.parquet
       hash: md5
-      md5: 066b335a41abe27f4e17ce16fc11e804
-      size: 5326
+      md5: ed6c2589723062b4acb86306c29d9a90
+      size: 7203
     - path: src/llm_search_dynamics/evaluation/knapsack.py
       hash: md5
-      md5: 6bb28b9bc192d2bf309a0e1192213e2b
-      size: 5621
+      md5: 86d7f87e833f9bb82e9ee43178879da4
+      size: 5630
     - path: src/llm_search_dynamics/evaluation/metrics.py
       hash: md5
       md5: 87fc97f1cf4893939dd027c1c3355eb1
       size: 2827
+    - path: src/llm_search_dynamics/pipeline/stages.py
+      hash: md5
+      md5: 9803b5e677ddb9e09ea9450709b6a08c
+      size: 39222
     - path: src/llm_search_dynamics/provenance.py
       hash: md5
-      md5: 8d11ce863c41cfa91cdbfbadf8c71e44
-      size: 3750
+      md5: 825b65a2e0ca7d56773a7009a33426d7
+      size: 3814
     - path: src/llm_search_dynamics/tracking/mlflow.py
       hash: md5
       md5: 61c648918c9ca759ee485adb302d4c06
@@ -317,15 +373,15 @@ stages:
       size: 51
     - path: artifacts/knapsack_pilot/provenance.json
       hash: md5
-      md5: 423ea7adf91222c98c859a6df15f2fcb
-      size: 4388
+      md5: 5e6ea24bef2b59c40528e9183fcc93af
+      size: 4622
     - path: artifacts/knapsack_pilot/resolved_config.json
       hash: md5
-      md5: dfadd836da774684eb0b8f23277491a7
-      size: 2489
+      md5: 20bf902cdf75953370d858462fa44eae
+      size: 2690
     - path: artifacts/knapsack_pilot/run.json
       hash: md5
-      md5: 87605179662bb574d28e08b726eca14e
+      md5: 5bc8a2e5622072a61e7361414da0f722
       size: 136
     - path: artifacts/knapsack_pilot/solver_config.json
       hash: md5
@@ -333,7 +389,7 @@ stages:
       size: 196
     - path: artifacts/knapsack_pilot/solver_status_summary.json
       hash: md5
-      md5: 82519e27b4339a4f6187827f3ba128bf
+      md5: f125cc447e81a762582304aaa1bbec18
       size: 231
     - path: artifacts/knapsack_pilot/validation.json
       hash: md5
@@ -341,60 +397,64 @@ stages:
       size: 56
     - path: data/derived/knapsack_pilot/evaluation_summary.json
       hash: md5
-      md5: 152614b48bb3b4b06bf793d6296d4097
-      size: 1054
+      md5: c8da1433d1f76bb768b7f09b824fb7a1
+      size: 1008
     - path: data/derived/knapsack_pilot/metrics.parquet
       hash: md5
-      md5: 6005f1d0167229cf05090e9e57c68faa
-      size: 3033
+      md5: 4c3022da9ec0f5057f931652aeae3ca2
+      size: 3017
     - path: data/derived/knapsack_pilot/predictions.json
       hash: md5
-      md5: 325db75eb79bd6c17ce4b5140cec6b77
-      size: 8129
+      md5: 11dcc26fb0562dde22b548898d0d23b9
+      size: 2524
   build_report:
     cmd: uv run lsd report --force
     deps:
     - path: artifacts/knapsack_pilot/run.json
       hash: md5
-      md5: 87605179662bb574d28e08b726eca14e
+      md5: 5bc8a2e5622072a61e7361414da0f722
       size: 136
     - path: data/derived/knapsack_pilot/evaluation_summary.json
       hash: md5
-      md5: 152614b48bb3b4b06bf793d6296d4097
-      size: 1054
+      md5: c8da1433d1f76bb768b7f09b824fb7a1
+      size: 1008
     - path: data/derived/knapsack_pilot/splits.json
       hash: md5
       md5: 11bd3a9c0f3c6bcc39de293e24de8163
       size: 633
     - path: data/raw/knapsack_pilot/checkpoints.parquet
       hash: md5
-      md5: 41ba2627ec97b82adc510d56f32078d9
-      size: 8417
+      md5: 931719e41613291f7a6e4e13507ef3f0
+      size: 7520
     - path: data/raw/knapsack_pilot/instances.parquet
       hash: md5
-      md5: 751cef5dc5ddbe8172eb329c8182fe59
+      md5: 6d7c3d0f89f56d5dc3c506e4ccf88618
       size: 4173
     - path: data/raw/knapsack_pilot/reference_solutions.parquet
       hash: md5
-      md5: 3559f63ade8be482d7b8d1e7e1d7f259
-      size: 7514
+      md5: c95a071153426f0260e0f7928ebc706c
+      size: 7506
     - path: data/raw/knapsack_pilot/trials.parquet
       hash: md5
-      md5: 066b335a41abe27f4e17ce16fc11e804
-      size: 5326
+      md5: ed6c2589723062b4acb86306c29d9a90
+      size: 7203
+    - path: src/llm_search_dynamics/pipeline/stages.py
+      hash: md5
+      md5: 9803b5e677ddb9e09ea9450709b6a08c
+      size: 39222
     - path: src/llm_search_dynamics/reporting/tables.py
       hash: md5
-      md5: d408d43f517a8c858595ca3359ebd232
-      size: 5291
+      md5: 643cf865bd8a6532a500ae7cfafcfc34
+      size: 5320
     outs:
     - path: artifacts/knapsack_pilot/report.md
       hash: md5
-      md5: 3dfa0182be17d78b7194bf6060740768
-      size: 2043
+      md5: 7524bfe8cdeac2bc862e2d810542cfe4
+      size: 2077
     - path: artifacts/knapsack_pilot/summary.csv
       hash: md5
-      md5: 40beef9146271420892731bb9b2f0c23
-      size: 1184
+      md5: 480dc137b06bb328e83e167ea1bc6d1b
+      size: 1156
   solve_references:
     cmd: uv run lsd solve-references --force
     deps:
@@ -412,24 +472,24 @@ stages:
       size: 135
     - path: data/raw/knapsack_pilot/instances.parquet
       hash: md5
-      md5: 751cef5dc5ddbe8172eb329c8182fe59
+      md5: 6d7c3d0f89f56d5dc3c506e4ccf88618
       size: 4173
     - path: src/llm_search_dynamics/data/reference_validation.py
       hash: md5
-      md5: a85112619d1ea6003f57bda4d2f82b4a
-      size: 17654
+      md5: 52376b95a28347664c9966d1d5466192
+      size: 18639
     - path: src/llm_search_dynamics/data/references.py
       hash: md5
       md5: bc21807cf7678913b6ffdf1377363d24
       size: 2343
     - path: src/llm_search_dynamics/data/schemas.py
       hash: md5
-      md5: e0be00c04e8babe3e9b927b7a21c56e6
-      size: 8859
+      md5: b37785c299b4995afe3307113b8cee15
+      size: 10948
     - path: src/llm_search_dynamics/pipeline/stages.py
       hash: md5
-      md5: d7417078ae9d383343192dd6fbb989b2
-      size: 37381
+      md5: 9803b5e677ddb9e09ea9450709b6a08c
+      size: 39222
     - path: src/llm_search_dynamics/solvers/base.py
       hash: md5
       md5: 9a32a46145a6f28f8bdbb41a0e046fcd
@@ -445,5 +505,5 @@ stages:
     outs:
     - path: data/raw/knapsack_pilot/reference_solutions.parquet
       hash: md5
-      md5: 3559f63ade8be482d7b8d1e7e1d7f259
-      size: 7514
+      md5: c95a071153426f0260e0f7928ebc706c
+      size: 7506

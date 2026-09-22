@@ -20,6 +20,8 @@ def test_default_seed_state_transition_metric_and_report_shape(tmp_path: Path) -
             "experiment=pilot",
             "task=dummy_binary",
             "solver=none",
+            "search_method=randomized_first_improvement",
+            "search.budget_limit=120",
             "state_model=baseline",
             "storage=local",
             "tracking=local",
@@ -43,15 +45,15 @@ def test_default_seed_state_transition_metric_and_report_shape(tmp_path: Path) -
         "transition_matrix"
     ]
     assert matrix[0] == [1, 0, 0, 0, 0, 0, 0]
-    assert matrix[1][0] == pytest.approx(0.6774193548387096)
-    assert matrix[2][1] == pytest.approx(0.7142857142857143)
+    assert matrix[1][0] == pytest.approx(0.7777777777777778)
+    assert matrix[2][1] == pytest.approx(0.7777777777777778)
     metrics = {
         row["metric_name"]: row
         for row in pq.read_table(paths.derived / "metrics.parquet").to_pylist()
     }
-    assert metrics["one_step_nll"]["metric_value"] == pytest.approx(0.59369652, abs=1e-7)
+    assert metrics["one_step_nll"]["metric_value"] == pytest.approx(0.53775348, abs=1e-7)
     assert metrics["one_step_accuracy"]["metric_value"] == pytest.approx(12 / 14)
-    assert metrics["success_brier_score"]["metric_value"] == pytest.approx(0.0335438, abs=1e-7)
+    assert metrics["success_brier_score"]["metric_value"] == pytest.approx(0.0183217, abs=1e-7)
     assert metrics["one_step_nll"]["n_units"] == 14
     with (paths.artifacts / "summary.csv").open(encoding="utf-8") as stream:
         columns = next(csv.reader(stream))

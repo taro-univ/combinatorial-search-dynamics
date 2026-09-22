@@ -1,7 +1,0 @@
-name: mock
-implemented: true
-trials: 2
-max_steps: 10
-greedy_probability: 0.75
-# Phase 2 maps temperature to exploration probability and max_new_tokens to max_steps.
-temperature: 0.25

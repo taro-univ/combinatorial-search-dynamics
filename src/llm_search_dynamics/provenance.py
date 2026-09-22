@@ -85,7 +85,8 @@ def collect_provenance(
         "config_hash": config_hash(config),
         "seeds": {
             "instance_generation": config["experiment"]["seed"]["instance_generation"],
-            "llm_sampling": config["experiment"]["seed"]["llm_sampling"],
+            "initial_state": config["experiment"]["seed"]["initial_state"],
+            "search": config["experiment"]["seed"]["search"],
             "data_split": config["experiment"]["seed"]["data_split"],
             "representation": config["experiment"]["seed"]["representation"],
             "dynamics": config["experiment"]["seed"]["dynamics"],

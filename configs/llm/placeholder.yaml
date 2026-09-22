@@ -1,3 +1,0 @@
-name: placeholder
-implemented: false
-# Credentials belong in environment variables or an untracked .env, never here.

@@ -247,7 +247,9 @@ def validate_knapsack_dataset(
             continue
         identifier = trial["instance_id"]
         instance = task_instances[identifier]
-        task = KnapsackTask.for_stored_instance(instance, max_steps=int(trial["max_new_tokens"]))
+        legacy = "max_new_tokens" in trial
+        budget_limit = int(trial["max_new_tokens"] if legacy else trial["budget_limit"])
+        task = KnapsackTask.for_stored_instance(instance, max_steps=budget_limit)
         reference = by_instance.get(identifier)
         optimal = (
             reference["optimal_value"] if reference and reference["optimality_proven"] else None
@@ -309,7 +311,8 @@ def validate_knapsack_dataset(
                 or state.capacity != instance.capacity
             ):
                 _error(issues, "checkpoint_instance_mismatch", "checkpoints", row["checkpoint_id"])
-            if state.step != row["checkpoint_index"]:
+            expected_step = row["checkpoint_index"] if legacy else row["accepted_moves"]
+            if state.step != expected_step:
                 _error(issues, "checkpoint_step_mismatch", "checkpoints", row["checkpoint_id"])
             if not task.is_feasible(state):
                 _error(issues, "checkpoint_infeasible", "checkpoints", row["checkpoint_id"])
@@ -337,13 +340,25 @@ def validate_knapsack_dataset(
                     for i, (a, b) in enumerate(zip(previous.selected, state.selected, strict=True))
                     if a != b
                 ]
-                if len(changed) != 1:
+                action_accepted = legacy or row["action_json"] is not None
+                action_index = changed[0] if len(changed) == 1 else None
+                if not legacy and row["action_json"] is not None:
+                    try:
+                        action_payload = json.loads(row["action_json"])
+                        action_accepted = bool(action_payload["accepted"])
+                        action_index = int(action_payload["bit_index"])
+                    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                        _error(
+                            issues, "checkpoint_action_invalid", "checkpoints", row["checkpoint_id"]
+                        )
+                expected_changes = 1 if action_accepted else 0
+                if len(changed) != expected_changes:
                     _error(
                         issues, "checkpoint_action_mismatch", "checkpoints", row["checkpoint_id"]
                     )
-                else:
+                elif action_accepted and action_index is not None:
                     try:
-                        applied = task.apply_action(previous, changed[0])
+                        applied = task.apply_action(previous, action_index)
                         if applied != state:
                             _error(
                                 issues,

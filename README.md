@@ -1,6 +1,6 @@
 # LLM Search Dynamics
 
-組合せ最適化の探索を記録・解析する研究基盤です。Phase 3では0-1ナップサックをOR-Tools CP-SATで解き、参照解とmock探索を比較する小規模CPU pilotを実行できます。Phase 2のdummy binary-target pilotも利用できます。両pilotはpipeline検証用であり、研究結論ではありません。外部API、LLM、GPU、DVC remote、MLflow serverは不要です。
+組合せ最適化の探索を記録・解析する研究基盤です。0-1ナップサックをOR-Tools CP-SATで参照計算し、古典探索の軌跡を収集する小規模CPU pilotを実行できます。外部API、LLM、GPU、DVC remote、MLflow serverは不要です。
 
 ## セットアップ
 
@@ -68,16 +68,19 @@ uv run lsd collect
 uv run lsd prepare
 uv run lsd extract
 uv run lsd split
+uv run lsd analyze-success
 uv run lsd fit
 uv run lsd evaluate
 uv run lsd report
 ```
 
+古典探索基盤の詳細は[移行仕様](docs/experiments/classical-search-migration.md)、次の成功予測比較は[B2・M2・M3実験仕様](docs/experiments/b2-m2-m3-feature-selection.md)に記載しています。
+
 CLI末尾のHydra overrideで小規模な別pilotを隔離できます。
 
 ```bash
 uv run lsd reproduce-pilot experiment=knapsack_pilot task=knapsack solver=ortools_cp_sat \
-  state_model=objective_gap experiment.instance_count=12 task.item_count=6 generation.trials=2 \
+  state_model=objective_gap experiment.instance_count=12 task.item_count=6 search.trials=2 \
   storage.raw_data_dir=/tmp/lsd-pilot/raw storage.interim_data_dir=/tmp/lsd-pilot/interim \
   storage.derived_data_dir=/tmp/lsd-pilot/derived storage.artifact_dir=/tmp/lsd-pilot/artifacts \
   tracking.tracking_uri=file:/tmp/lsd-pilot/mlruns
@@ -85,7 +88,7 @@ uv run lsd reproduce-pilot experiment=knapsack_pilot task=knapsack solver=ortool
 
 local MLflow runは任意で`MLFLOW_ALLOW_FILE_STORE=true uv run mlflow ui --backend-store-uri file:./mlruns`から確認できます。pilot自体にserver起動は不要です。MLflow 3.16以降で必要なfile-store opt-inはtracking adapterがpilotのプロセス内で設定します。
 
-`llm/mock.yaml`はPhase 1の`trials.llm_name`との互換用識別でありLLM adapterではありません。`temperature`は探索確率`1 - greedy_probability`、`max_new_tokens`はstep budgetに対応します。OR-ToolsはCPU上の参照solverで、mock探索器とは別です。`OPTIMAL`だけが最適性証明を意味し、`FEASIBLE`は解と上界があるものの最適とは断定しません。最大化gapは`max(0, best_bound - best_feasible_value) / max(abs(best_feasible_value), epsilon)`で、既定`epsilon=1e-9`です。解がない場合はnullです。
+既定は3探索手法のpaired比較です。単独実行は`search_method=randomized_first_improvement`、`simulated_annealing`、`tabu`で切り替えます。主予算は候補解を調べた回数で、`search.budget_limit`がnullなら`search.budget_multiplier × 問題サイズ`です。`analyze-success`はB2・M2・M3の特徴抽出、validation前進選択、固定後のtest評価、問題特徴の記録を行います。
 
 ナップサックの個別solver stageは、instance生成後に実行できます。
 
@@ -116,6 +119,7 @@ Codex CLIはリポジトリ開発を補助する外部ツールであり、研�
 - `docs/adr/`: 技術判断
 - `docs/architecture.md`: Phase 0–3の構成
 - `docs/experiment-protocol.md`: pilot条件と将来の実験計画
+- `docs/experiments/`: 個別実験の仮説、比較条件、反証条件
 - `docs/data-dictionary.md`: table・配列・対応規則
 - `docs/pilot.md`: 再現手順とstage成果物
 

@@ -34,18 +34,19 @@ def test_knapsack_fixed_seed_objective_states_matrix_and_metrics(tmp_path: Path)
     assert instance["instance_id"] == "ins_e2a49a6df4531a68d241828b"
     assert reference.schema == get_schema("reference_solutions")
     assert reference.to_pylist()[0]["optimal_value"] == 26.0
-    assert (checkpoint["objective_value"], checkpoint["optimality_gap"]) == (0.0, 1.0)
-    assert states[0]["discrete_state"] == 5
+    assert checkpoint["objective_value"] == 23.0
+    assert checkpoint["optimality_gap"] == pytest.approx(3 / 26)
+    assert states[0]["discrete_state"] == 2
     assert read_split(paths.derived / "splits.json").split_hash == (
         "53a0295823feaec35e703933bd836163e8569281107ae4bc93cb23ccf132c0ad"
     )
     assert matrix[0] == [1, 0, 0, 0, 0, 0]
     assert matrix[1] == pytest.approx([1 / 6] * 6)
-    assert metrics["one_step_nll"] == pytest.approx(1.9162592254151531)
-    assert metrics["one_step_accuracy"] == pytest.approx(1 / 3)
-    assert metrics["success_brier_score"] == pytest.approx(0.1540732619953399)
-    assert metrics["knapsack_final_value_mean"] == 25.0
-    assert metrics["knapsack_success_rate_trial"] == 1.0
+    assert metrics["one_step_nll"] == pytest.approx(2.349751613751945)
+    assert metrics["one_step_accuracy"] == 0.0
+    assert metrics["success_brier_score"] == pytest.approx(0.3292824074074074)
+    assert metrics["knapsack_final_value_mean"] == 24.0
+    assert metrics["knapsack_success_rate_trial"] == 0.5
     with (paths.artifacts / "summary.csv").open(encoding="utf-8") as stream:
         columns = next(csv.reader(stream))
     assert columns == ["metric", "value"]

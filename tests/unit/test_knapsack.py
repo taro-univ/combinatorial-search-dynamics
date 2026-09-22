@@ -14,7 +14,6 @@ from llm_search_dynamics.data.parquet import read_parquet, write_parquet
 from llm_search_dynamics.data.reference_validation import validate_references
 from llm_search_dynamics.data.references import reference_row
 from llm_search_dynamics.data.schemas import SCHEMA_VERSION, get_schema
-from llm_search_dynamics.generation.mock import MockGenerator
 from llm_search_dynamics.identifiers import canonical_json, instance_id
 from llm_search_dynamics.solvers.base import SolverParameters, SolverStatus
 from llm_search_dynamics.solvers.ortools_knapsack import (
@@ -24,7 +23,7 @@ from llm_search_dynamics.solvers.ortools_knapsack import (
     relative_maximization_gap,
 )
 from llm_search_dynamics.solvers.registry import get_solver
-from llm_search_dynamics.tasks.dummy_binary import BinaryInstance, DummyBinaryTask
+from llm_search_dynamics.tasks.dummy_binary import DummyBinaryTask
 from llm_search_dynamics.tasks.knapsack import KnapsackInstance, KnapsackTask
 from llm_search_dynamics.tasks.registry import get_task
 
@@ -96,7 +95,7 @@ def test_knapsack_generation_state_and_toggle_contract() -> None:
     )
 
 
-def test_objective_direction_and_mock_reference_separation() -> None:
+def test_objective_direction_and_reference_success() -> None:
     binary = DummyBinaryTask(bit_count=2, max_steps=2)
     assert binary.is_better(0, 1)
     knapsack = task()
@@ -106,25 +105,6 @@ def test_objective_direction_and_mock_reference_separation() -> None:
     optimal = knapsack.apply_action(knapsack.apply_action(initial, 0), 1)
     assert not knapsack.is_success(optimal)
     assert knapsack.is_success(optimal, 9.0)
-    greedy = MockGenerator(greedy_probability=1.0, max_steps=1)
-    result = greedy.generate(
-        task=knapsack,
-        instance=fixed_instance(),
-        source_instance_id="ins_fixed",
-        experiment_conditions={"test": True},
-        sampling_seed=2,
-        reference_value=9.0,
-    )
-    assert result.checkpoints[1].state.selected == (0, 0, 1)
-    assert not result.success  # greedy receives no reference solution action sequence
-    dummy = greedy.generate(
-        task=binary,
-        instance=BinaryInstance(2, (1, 0), (0, 0)),
-        source_instance_id="ins_dummy",
-        experiment_conditions={"test": True},
-        sampling_seed=2,
-    )
-    assert dummy.checkpoints[1].objective == 0.0
 
 
 def test_cp_sat_optimum_gap_status_and_revalidation() -> None:

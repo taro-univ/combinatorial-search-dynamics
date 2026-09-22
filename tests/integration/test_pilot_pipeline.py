@@ -24,12 +24,14 @@ def _overrides(directory: Path) -> list[str]:
         "experiment=pilot",
         "task=dummy_binary",
         "solver=none",
+        "search_method=randomized_first_improvement",
+        "search.budget_limit=120",
         "state_model=baseline",
         "storage=local",
         "tracking=local",
         "experiment.instance_count=9",
         "task.bit_count=6",
-        "generation.trials=2",
+        "search.trials=2",
         f"storage.raw_data_dir={directory / 'raw'}",
         f"storage.interim_data_dir={directory / 'interim'}",
         f"storage.derived_data_dir={directory / 'derived'}",
@@ -46,7 +48,7 @@ def test_cli_full_pilot_and_phase_one_contract(tmp_path: Path) -> None:
     assert validate_dataset(paths.raw).is_valid
     assert CliRunner().invoke(app, ["validate-data", "--data-dir", str(paths.raw)]).exit_code == 0
     assert read_observation_store(paths.raw / "observations.zarr").observation_metadata == {
-        "source": "mock",
+        "source": "classical_search",
         "observation_kind": "external-only",
     }
     store = read_observation_store(paths.raw / "observations.zarr")
@@ -81,7 +83,7 @@ def test_cli_full_pilot_and_phase_one_contract(tmp_path: Path) -> None:
     logged_run = client.get_run(run_id)
     assert logged_run.data.tags["split_hash"] == split.split_hash
     assert logged_run.data.tags["task_name"] == "dummy_binary"
-    assert logged_run.data.tags["generator_name"] == "mock_binary_search"
+    assert logged_run.data.tags["search_method_name"] == "randomized_first_improvement"
     assert logged_run.data.metrics["one_step_accuracy"] >= 0
     names = {artifact.path for artifact in client.list_artifacts(run_id)}
     assert {

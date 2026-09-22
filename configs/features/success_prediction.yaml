@@ -1,0 +1,10 @@
+name: success_prediction
+implemented: true
+analysis_version: "1"
+history_window_budget: 20
+normalization_epsilon: 1.0e-9
+instance_sampling:
+  seed: 1800
+  sample_count: 128
+  random_walk_steps: 128
+  neighborhood: one_bit_flip

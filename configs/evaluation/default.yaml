@@ -9,3 +9,12 @@ split_ratios:
   test: 0.2
 horizon: 1
 probability_floor: 1.0e-12
+success_prediction:
+  regularization: 1.0
+  max_iterations: 200
+  tolerance: 1.0e-8
+  calibration_bins: 5
+  min_delta: 1.0e-4
+  max_features_m2: 3
+  max_features_m3: 3
+  bootstrap_samples: 500

@@ -33,14 +33,24 @@ stages:
     deps:
       - data/raw/knapsack_pilot/instances.parquet
       - data/raw/knapsack_pilot/reference_solutions.parquet
-      - configs/generation/mock.yaml
-      - configs/llm/mock.yaml
+      - configs/config.yaml
+      - configs/search/default.yaml
+      - configs/search_method/randomized_first_improvement.yaml
+      - configs/search_method/simulated_annealing.yaml
+      - configs/search_method/tabu.yaml
+      - configs/search_method/classical_comparison.yaml
       - configs/observation/external_only.yaml
       - configs/experiment/knapsack_pilot.yaml
       - configs/task/knapsack.yaml
       - configs/storage/knapsack_local.yaml
-      - src/llm_search_dynamics/generation/mock.py
+      - src/llm_search_dynamics/search/base.py
+      - src/llm_search_dynamics/search/algorithms.py
+      - src/llm_search_dynamics/search/initialization.py
+      - src/llm_search_dynamics/search/registry.py
+      - src/llm_search_dynamics/data/parquet.py
+      - src/llm_search_dynamics/data/schemas.py
       - src/llm_search_dynamics/data/zarr.py
+      - src/llm_search_dynamics/pipeline/stages.py
     outs:
       - data/raw/knapsack_pilot/trials.parquet
       - data/raw/knapsack_pilot/checkpoints.parquet
@@ -57,6 +67,7 @@ stages:
       - data/raw/knapsack_pilot/reference_solutions.parquet
       - src/llm_search_dynamics/data/validation.py
       - src/llm_search_dynamics/data/reference_validation.py
+      - src/llm_search_dynamics/pipeline/stages.py
     outs:
       - data/interim/knapsack_pilot/trajectories.json
   extract_features:
@@ -66,6 +77,7 @@ stages:
       - data/raw/knapsack_pilot/reference_solutions.parquet
       - configs/observation/external_only.yaml
       - src/llm_search_dynamics/features/external.py
+      - src/llm_search_dynamics/pipeline/stages.py
     outs:
       - data/derived/knapsack_pilot/features.json
   make_splits:
@@ -76,6 +88,7 @@ stages:
       - configs/experiment/knapsack_pilot.yaml
       - configs/evaluation/default.yaml
       - src/llm_search_dynamics/data/splits.py
+      - src/llm_search_dynamics/pipeline/stages.py
     outs:
       - data/derived/knapsack_pilot/splits.json
   fit_model:
@@ -89,10 +102,34 @@ stages:
       - src/llm_search_dynamics/state_models/objective_gap.py
       - src/llm_search_dynamics/state_models/registry.py
       - src/llm_search_dynamics/dynamics/transition.py
+      - src/llm_search_dynamics/pipeline/stages.py
     outs:
       - artifacts/knapsack_pilot/state_model.json
       - artifacts/knapsack_pilot/dynamics_model.json
       - data/derived/knapsack_pilot/state_assignments.json
+  analyze_success:
+    cmd: uv run lsd analyze-success --force
+    deps:
+      - data/raw/knapsack_pilot/instances.parquet
+      - data/raw/knapsack_pilot/trials.parquet
+      - data/raw/knapsack_pilot/checkpoints.parquet
+      - data/raw/knapsack_pilot/reference_solutions.parquet
+      - data/derived/knapsack_pilot/splits.json
+      - configs/features/success_prediction.yaml
+      - configs/evaluation/default.yaml
+      - configs/experiment/knapsack_pilot.yaml
+      - src/llm_search_dynamics/features/success.py
+      - src/llm_search_dynamics/evaluation/success_features.py
+      - src/llm_search_dynamics/pipeline/stages.py
+    outs:
+      - data/derived/knapsack_pilot/success_features.parquet
+      - data/derived/knapsack_pilot/instance_features.parquet
+      - data/derived/knapsack_pilot/success_predictions.parquet
+      - artifacts/knapsack_pilot/success_feature_models.json
+      - artifacts/knapsack_pilot/success_feature_selection.json
+      - artifacts/knapsack_pilot/success_feature_comparison.json
+      - artifacts/knapsack_pilot/success_feature_comparison.md
+      - artifacts/knapsack_pilot/success_analysis_config.json
   evaluate_model:
     cmd: uv run lsd evaluate --force
     deps:
@@ -112,6 +149,7 @@ stages:
       - src/llm_search_dynamics/evaluation/knapsack.py
       - src/llm_search_dynamics/provenance.py
       - src/llm_search_dynamics/tracking/mlflow.py
+      - src/llm_search_dynamics/pipeline/stages.py
     outs:
       - data/derived/knapsack_pilot/metrics.parquet
       - data/derived/knapsack_pilot/predictions.json
@@ -134,6 +172,7 @@ stages:
       - data/raw/knapsack_pilot/reference_solutions.parquet
       - artifacts/knapsack_pilot/run.json
       - src/llm_search_dynamics/reporting/tables.py
+      - src/llm_search_dynamics/pipeline/stages.py
     outs:
       - artifacts/knapsack_pilot/report.md
       - artifacts/knapsack_pilot/summary.csv

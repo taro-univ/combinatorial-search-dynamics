@@ -49,7 +49,7 @@ def evaluate_knapsack(
     absolute_gaps: list[float] = []
     relative_gaps: list[float] = []
     best_values: list[float] = []
-    reached_steps: list[int] = []
+    reached_budgets: list[int] = []
     feasible_count = 0
     checkpoint_count = 0
     success_by_instance: dict[str, bool] = {identifier: False for identifier in test_instance_ids}
@@ -78,7 +78,7 @@ def evaluate_knapsack(
             relative_gaps.append(task.objective_gap(final, optimal, epsilon=epsilon))
             for point, value in zip(points, objectives, strict=True):
                 if value >= optimal - 1e-9:
-                    reached_steps.append(int(point["checkpoint_index"]))
+                    reached_budgets.append(int(point["budget_used"]))
                     break
     test_references = [
         reference_by_instance[identifier] for identifier in sorted(test_instance_ids)
@@ -115,9 +115,9 @@ def evaluate_knapsack(
         metrics["knapsack_final_relative_gap_mean"] = ProblemMetric(
             sum(relative_gaps) / len(relative_gaps), len(relative_gaps)
         )
-    if reached_steps:
-        metrics["knapsack_optimal_reached_step_mean"] = ProblemMetric(
-            sum(reached_steps) / len(reached_steps), len(reached_steps)
+    if reached_budgets:
+        metrics["knapsack_optimal_reached_budget_mean"] = ProblemMetric(
+            sum(reached_budgets) / len(reached_budgets), len(reached_budgets)
         )
     statuses = dict(sorted(Counter(row["solver_status"] for row in references).items()))
     report = {

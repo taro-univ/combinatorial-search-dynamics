@@ -17,7 +17,7 @@ from llm_search_dynamics.data.schemas import TABLE_NAMES
 from llm_search_dynamics.data.validation import validate_dataset
 from llm_search_dynamics.pipeline.stages import STAGE_NAMES, PilotPaths, reproduce_pilot, run_stage
 
-app = typer.Typer(help="LLM Search Dynamics CLI")
+app = typer.Typer(help="Search Dynamics CLI")
 
 
 def repo_root() -> Path:

@@ -9,7 +9,11 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from llm_search_dynamics.data.schemas import validate_table_schema
+from llm_search_dynamics.data.schemas import (
+    SCHEMA_VERSION,
+    table_schema_version,
+    validate_table_schema,
+)
 
 DEFAULT_COMPRESSION = "zstd"
 
@@ -40,6 +44,10 @@ def write_parquet(
     they explicitly opt into ``overwrite=True``.
     """
     validate_table_schema(table, table_name)
+    if table_schema_version(table) != SCHEMA_VERSION:
+        raise ValueError(
+            "Legacy schemas are read-only; new Parquet writes must use schema version 2"
+        )
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists() and not overwrite:

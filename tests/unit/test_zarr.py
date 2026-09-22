@@ -21,10 +21,9 @@ def _write(path, observations=None, trial_ids=None) -> None:
         observations or make_observations(tables),
         trial_ids=trial_ids or checkpoints.column("trial_id").to_pylist(),
         checkpoint_ids=checkpoints.column("checkpoint_id").to_pylist(),
-        generated_token_indices=checkpoints.column("generated_token_index").to_pylist(),
+        budget_used=checkpoints.column("budget_used").to_pylist(),
         observation_code_version="test-v1",
-        model_revision="model-r1",
-        tokenizer_revision="tokenizer-r1",
+        search_method_revision="search-r1",
     )
 
 
@@ -33,8 +32,7 @@ def test_observations_masks_indexes_and_attributes_round_trip(tmp_path) -> None:
     _write(path)
     stored = read_observation_store(path)
     assert set(stored.observations) == set(OBSERVATION_GROUPS)
-    assert stored.model_revision == "model-r1"
-    assert stored.tokenizer_revision == "tokenizer-r1"
+    assert stored.search_method_revision == "search-r1"
     assert stored.observation_code_version == "test-v1"
     root = zarr.open_group(path, mode="r")
     assert root.metadata.zarr_format == 3
@@ -71,6 +69,23 @@ def test_version_mismatch_is_rejected(tmp_path) -> None:
         read_observation_store(path)
 
 
+def test_schema_v1_index_is_read_compatibly(tmp_path) -> None:
+    path = tmp_path / "observations.zarr"
+    _write(path)
+    root = zarr.open_group(path, mode="a")
+    values = np.asarray(root["index"]["budget_used"][:])
+    del root["index"]["budget_used"]
+    root["index"].create_array(
+        "generated_token_index",
+        data=values,
+        chunks=(len(values),),
+        dimension_names=("checkpoint",),
+        attributes={"shape": [len(values)], "axis_names": ["checkpoint"], "dtype": "int64"},
+    )
+    root.attrs["schema_version"] = "1"
+    np.testing.assert_array_equal(read_observation_store(path).budget_used, values)
+
+
 def test_incomplete_store_is_rejected(tmp_path) -> None:
     path = tmp_path / "observations.zarr"
     _write(path)
@@ -104,7 +119,7 @@ def test_explicit_store_overwrite_replaces_complete_store(tmp_path) -> None:
         make_observations(tables),
         trial_ids=checkpoints.column("trial_id").to_pylist(),
         checkpoint_ids=checkpoints.column("checkpoint_id").to_pylist(),
-        generated_token_indices=checkpoints.column("generated_token_index").to_pylist(),
+        budget_used=checkpoints.column("budget_used").to_pylist(),
         observation_code_version="replacement-v2",
         overwrite=True,
     )

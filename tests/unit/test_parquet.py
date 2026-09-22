@@ -48,11 +48,24 @@ def test_explicit_overwrite_replaces_file(tmp_path) -> None:
 def test_version_mismatch_is_rejected_on_read(tmp_path) -> None:
     table = make_tables()["instances"]
     metadata = dict(table.schema.metadata or {})
-    metadata[b"schema_version"] = b"2"
+    metadata[b"schema_version"] = b"1"
     path = tmp_path / "instances.parquet"
     pq.write_table(table.replace_schema_metadata(metadata), path)
     with pytest.raises(UnsupportedSchemaVersionError):
         read_parquet(path, "instances")
+
+
+def test_schema_v1_can_be_read_but_not_written(tmp_path) -> None:
+    current = make_tables()["instances"]
+    rows = [{**row, "schema_version": "1"} for row in current.to_pylist()]
+    from llm_search_dynamics.data.schemas import get_schema
+
+    legacy = pa.Table.from_pylist(rows, schema=get_schema("instances", "1"))
+    path = tmp_path / "legacy.parquet"
+    pq.write_table(legacy, path)
+    assert read_parquet(path, "instances").equals(legacy)
+    with pytest.raises(ValueError, match="read-only"):
+        write_parquet(legacy, tmp_path / "legacy-copy.parquet", "instances")
 
 
 def test_invalid_schema_is_rejected_before_write(tmp_path) -> None:

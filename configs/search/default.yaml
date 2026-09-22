@@ -1,0 +1,10 @@
+implemented: true
+budget_type: candidate_evaluations
+# When budget_limit is null, budget_multiplier * problem_size is used.
+budget_limit: null
+budget_multiplier: 1
+trials: 2
+checkpoint_policy: decision
+initial_state:
+  strategy: random_feasible
+  include_probability: 0.5

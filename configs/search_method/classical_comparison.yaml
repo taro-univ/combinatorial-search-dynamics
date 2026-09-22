@@ -1,0 +1,20 @@
+name: classical_comparison
+revision: "1"
+implemented: true
+methods:
+  - name: randomized_first_improvement
+    revision: "1"
+    accept_equal: false
+    restart: false
+  - name: simulated_annealing
+    revision: "1"
+    initial_temperature: 10.0
+    final_temperature: 0.1
+    schedule: geometric_by_budget
+    restart: false
+  - name: short_term_tabu
+    revision: "1"
+    tenure: 3
+    aspiration: global_best
+    long_term_memory: false
+    restart: false

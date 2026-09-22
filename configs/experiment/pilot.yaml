@@ -4,7 +4,8 @@ description: Deterministic CPU-only pipeline validation; not a research experime
 instance_count: 9
 seed:
   instance_generation: 100
-  llm_sampling: 200
+  initial_state: 200
+  search: 250
   data_split: 300
   representation: 400
   dynamics: 500

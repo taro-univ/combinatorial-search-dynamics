@@ -72,36 +72,36 @@ def experiment_id(name: str, conditions: Mapping[str, Any]) -> str:
 def trial_id(
     source_instance_id: str,
     experiment_conditions: Mapping[str, Any],
-    sampling_seed: int,
+    search_seed: int,
 ) -> str:
-    """Derive a trial ID from instance, complete conditions, and sampling seed."""
+    """Derive a trial ID from instance, complete conditions, and search seed."""
     if not source_instance_id:
         raise ValueError("source_instance_id must be non-empty")
-    if isinstance(sampling_seed, bool) or not isinstance(sampling_seed, int):
-        raise TypeError("sampling_seed must be an integer")
+    if isinstance(search_seed, bool) or not isinstance(search_seed, int):
+        raise TypeError("search_seed must be an integer")
     return _content_id(
         "trl",
         {
             "instance_id": source_instance_id,
             "experiment_conditions": experiment_conditions,
-            "sampling_seed": sampling_seed,
+            "search_seed": search_seed,
         },
     )
 
 
-def checkpoint_id(source_trial_id: str, generated_token_index: int) -> str:
-    """Derive a checkpoint ID from a trial ID and non-negative token position."""
+def checkpoint_id(source_trial_id: str, checkpoint_index: int) -> str:
+    """Derive a checkpoint ID from a trial ID and non-negative checkpoint position."""
     if not source_trial_id:
         raise ValueError("source_trial_id must be non-empty")
     if (
-        isinstance(generated_token_index, bool)
-        or not isinstance(generated_token_index, int)
-        or generated_token_index < 0
+        isinstance(checkpoint_index, bool)
+        or not isinstance(checkpoint_index, int)
+        or checkpoint_index < 0
     ):
-        raise ValueError("generated_token_index must be a non-negative integer")
+        raise ValueError("checkpoint_index must be a non-negative integer")
     return _content_id(
         "chk",
-        {"trial_id": source_trial_id, "generated_token_index": generated_token_index},
+        {"trial_id": source_trial_id, "checkpoint_index": checkpoint_index},
     )
 
 

@@ -57,8 +57,8 @@ def test_checkpoint_order_violation_is_detected(tmp_path) -> None:
     tables = make_tables()
     checkpoints = tables["checkpoints"]
     tables["checkpoints"] = checkpoints.set_column(
-        checkpoints.schema.get_field_index("generated_token_index"),
-        checkpoints.schema.field("generated_token_index"),
+        checkpoints.schema.get_field_index("budget_used"),
+        checkpoints.schema.field("budget_used"),
         pa.array([8, 0, 0], type=pa.int64()),
     )
     write_dataset(tmp_path, tables)
@@ -89,7 +89,7 @@ def test_zarr_checkpoint_mismatch_is_detected(tmp_path) -> None:
         make_observations(tables),
         trial_ids=checkpoints.column("trial_id").to_pylist(),
         checkpoint_ids=zarr_ids,
-        generated_token_indices=checkpoints.column("generated_token_index").to_pylist(),
+        budget_used=checkpoints.column("budget_used").to_pylist(),
         observation_code_version="test-v1",
     )
     assert {"zarr_checkpoint_missing", "zarr_checkpoint_unknown"} <= _codes(tmp_path)

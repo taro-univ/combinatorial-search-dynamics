@@ -1,0 +1,8 @@
+name: simulated_annealing
+revision: "1"
+implemented: true
+# Objective differences are raw for now; these values are pilot defaults.
+initial_temperature: 10.0
+final_temperature: 0.1
+schedule: geometric_by_budget
+restart: false

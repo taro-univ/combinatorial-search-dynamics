@@ -22,11 +22,13 @@ def knapsack_overrides(directory: Path) -> list[str]:
         "experiment=knapsack_pilot",
         "task=knapsack",
         "solver=ortools_cp_sat",
+        "search_method=randomized_first_improvement",
+        "search.budget_limit=120",
         "state_model=objective_gap",
         "storage=knapsack_local",
         "tracking=knapsack_local",
         "experiment.instance_count=6",
-        "generation.trials=2",
+        "search.trials=2",
         f"storage.raw_data_dir={directory / 'raw'}",
         f"storage.interim_data_dir={directory / 'interim'}",
         f"storage.derived_data_dir={directory / 'derived'}",
@@ -45,7 +47,16 @@ def test_knapsack_cli_pipeline_and_phase_one_validation(tmp_path: Path) -> None:
     solve = CliRunner().invoke(app, ["solve-references", *options])
     assert solve.exit_code == 0 and "OPTIMAL" in solve.output
     assert CliRunner().invoke(app, ["solve-references", *options]).exit_code == 0
-    for stage in ("collect", "prepare", "extract", "split", "fit", "evaluate", "report"):
+    for stage in (
+        "collect",
+        "prepare",
+        "extract",
+        "split",
+        "analyze-success",
+        "fit",
+        "evaluate",
+        "report",
+    ):
         result = CliRunner().invoke(app, [stage, *options])
         assert result.exit_code == 0, (stage, result.output)
     assert validate_dataset(paths.raw).is_valid
@@ -83,7 +94,7 @@ def test_knapsack_cli_pipeline_and_phase_one_validation(tmp_path: Path) -> None:
     client = mlflow.tracking.MlflowClient(tracking_uri=paths.tracking_uri)
     run = client.get_run(run_id)
     assert run.data.tags["solver_name"] == "ortools_cp_sat"
-    assert run.data.tags["reference_schema_version"] == "1"
+    assert run.data.tags["reference_schema_version"] == "2"
     assert {entry.path for entry in client.list_artifacts(run_id)} >= {
         "reference_solutions.parquet",
         "solver_config.json",
@@ -98,6 +109,11 @@ def test_knapsack_cli_pipeline_and_phase_one_validation(tmp_path: Path) -> None:
     )
     connection.close()
     assert "OR-Tools" in (paths.artifacts / "report.md").read_text(encoding="utf-8")
+    assert run.data.tags["search_method_name"] == "randomized_first_improvement"
+    selection = json.loads(
+        (paths.artifacts / "success_feature_selection.json").read_text(encoding="utf-8")
+    )
+    assert set(selection["selection"]) == {"randomized_first_improvement"}
     collision = CliRunner().invoke(app, ["generate-instances", *options])
     assert collision.exit_code != 0 and "existing output" in collision.output
 
@@ -129,3 +145,45 @@ def test_knapsack_science_repeats_for_same_seed(tmp_path: Path) -> None:
             )
         )
     assert results[0] == results[1]
+
+
+def test_three_methods_are_paired_and_success_models_are_method_specific(tmp_path: Path) -> None:
+    options = [
+        item
+        for item in knapsack_overrides(tmp_path)
+        if not item.startswith(
+            ("search_method=", "search.budget_limit=", "experiment.instance_count=")
+        )
+    ]
+    options.extend(
+        [
+            "search_method=classical_comparison",
+            "search.budget_limit=6",
+            "experiment.instance_count=9",
+            "features.instance_sampling.sample_count=8",
+            "features.instance_sampling.random_walk_steps=8",
+            "evaluation.success_prediction.bootstrap_samples=20",
+        ]
+    )
+    result = CliRunner().invoke(app, ["reproduce-pilot", *options])
+    assert result.exit_code == 0, result.output
+    paths = PilotPaths.from_config(resolved_config(overrides=options))
+    trials = pq.read_table(paths.raw / "trials.parquet").to_pylist()
+    paired: dict[tuple[str, int], list[dict[str, object]]] = {}
+    for trial in trials:
+        paired.setdefault((trial["instance_id"], trial["search_seed"]), []).append(trial)
+    expected_methods = {
+        "randomized_first_improvement",
+        "simulated_annealing",
+        "short_term_tabu",
+    }
+    assert all(
+        {row["search_method_name"] for row in group} == expected_methods
+        for group in paired.values()
+    )
+    assert all(len({row["initial_state_json"] for row in group}) == 1 for group in paired.values())
+    comparison = json.loads(
+        (paths.artifacts / "success_feature_comparison.json").read_text(encoding="utf-8")
+    )
+    assert set(comparison["comparison"]) == expected_methods
+    assert pq.read_table(paths.derived / "instance_features.parquet").num_rows == 9

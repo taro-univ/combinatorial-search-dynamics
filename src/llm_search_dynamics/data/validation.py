@@ -16,6 +16,7 @@ from llm_search_dynamics.data.schemas import (
     UnsupportedSchemaVersionError,
     get_schema,
     schema_issues,
+    table_schema_version,
 )
 from llm_search_dynamics.data.zarr import (
     ZarrValidationError,
@@ -68,7 +69,10 @@ def _values(table: pa.Table, column: str) -> list[object]:
 def _compatible_columns(table: pa.Table, table_name: str, columns: set[str]) -> bool:
     if not columns <= set(table.column_names):
         return False
-    expected = get_schema(table_name)
+    version = table_schema_version(table)
+    if not version:
+        return False
+    expected = get_schema(table_name, version)
     return all(table.schema.field(name).type == expected.field(name).type for name in columns)
 
 
@@ -174,14 +178,17 @@ def _validate_relations(tables: dict[str, pa.Table], issues: list[ValidationIssu
 
 
 def _validate_checkpoint_order(table: pa.Table, issues: list[ValidationIssue]) -> None:
-    required = {"trial_id", "checkpoint_index", "generated_token_index"}
+    position_column = (
+        "budget_used" if "budget_used" in table.column_names else "generated_token_index"
+    )
+    required = {"trial_id", "checkpoint_index", position_column}
     if not _compatible_columns(table, "checkpoints", required):
         return
     grouped: dict[str, list[tuple[int, int]]] = defaultdict(list)
     rows = zip(
         _values(table, "trial_id"),
         _values(table, "checkpoint_index"),
-        _values(table, "generated_token_index"),
+        _values(table, position_column),
         strict=True,
     )
     for trial, checkpoint_index, token_index in rows:
@@ -204,7 +211,7 @@ def _validate_checkpoint_order(table: pa.Table, issues: list[ValidationIssue]) -
             _issue(
                 issues,
                 "checkpoint_order",
-                "generated_token_index decreases as checkpoint_index increases",
+                f"{position_column} decreases as checkpoint_index increases",
                 "checkpoints",
                 trial,
             )
@@ -247,6 +254,52 @@ def _validate_enums_and_status(tables: dict[str, pa.Table], issues: list[Validat
             )
 
 
+def _validate_search_budget(tables: dict[str, pa.Table], issues: list[ValidationIssue]) -> None:
+    trials = tables.get("trials")
+    checkpoints = tables.get("checkpoints")
+    if trials is None or checkpoints is None or "budget_limit" not in trials.column_names:
+        return
+    limits = {str(row["trial_id"]): int(row["budget_limit"]) for row in trials.to_pylist()}
+    for trial in trials.to_pylist():
+        if trial["budget_type"] != "candidate_evaluations" or trial["budget_limit"] <= 0:
+            _issue(
+                issues,
+                "invalid_search_budget",
+                "Invalid candidate-evaluation budget",
+                "trials",
+                trial["trial_id"],
+            )
+    for row in checkpoints.to_pylist():
+        limit = limits.get(str(row["trial_id"]))
+        if limit is None:
+            continue
+        used = int(row["budget_used"])
+        if used < 0 or used > limit or int(row["remaining_budget"]) != limit - used:
+            _issue(
+                issues,
+                "budget_accounting",
+                "Checkpoint budget accounting is inconsistent",
+                "checkpoints",
+                row["checkpoint_id"],
+            )
+        if row["accepted_moves"] < 0 or row["rejected_moves"] < 0:
+            _issue(
+                issues,
+                "move_count",
+                "Move counts must be non-negative",
+                "checkpoints",
+                row["checkpoint_id"],
+            )
+        if row["accepted_moves"] + row["rejected_moves"] != used:
+            _issue(
+                issues,
+                "move_count",
+                "Accepted and rejected candidates must equal budget_used",
+                "checkpoints",
+                row["checkpoint_id"],
+            )
+
+
 def _validate_zarr(
     directory: Path,
     checkpoints: pa.Table | None,
@@ -268,7 +321,10 @@ def _validate_zarr(
         return
     if checkpoints is None:
         return
-    required = {"checkpoint_id", "trial_id", "generated_token_index"}
+    position_column = (
+        "budget_used" if "budget_used" in checkpoints.column_names else "generated_token_index"
+    )
+    required = {"checkpoint_id", "trial_id", position_column}
     if not _compatible_columns(checkpoints, "checkpoints", required):
         return
 
@@ -277,7 +333,7 @@ def _validate_zarr(
         for checkpoint, trial, token in zip(
             _values(checkpoints, "checkpoint_id"),
             _values(checkpoints, "trial_id"),
-            _values(checkpoints, "generated_token_index"),
+            _values(checkpoints, position_column),
             strict=True,
         )
         if checkpoint is not None and trial is not None and token is not None
@@ -301,7 +357,7 @@ def _validate_zarr(
     for checkpoint, trial, token in zip(
         store.checkpoint_ids,
         store.trial_ids,
-        store.generated_token_indices.tolist(),
+        store.budget_used.tolist(),
         strict=True,
     ):
         if checkpoint not in parquet_index:
@@ -316,7 +372,7 @@ def _validate_zarr(
             _issue(
                 issues,
                 "zarr_index_mismatch",
-                "Zarr trial_id or token index differs from Parquet",
+                "Zarr trial_id or budget position differs from Parquet",
                 "observations.zarr",
                 checkpoint,
             )
@@ -366,6 +422,7 @@ def validate_dataset(data_dir: Path, *, allow_empty: bool = False) -> Validation
     if "checkpoints" in tables:
         _validate_checkpoint_order(tables["checkpoints"], issues)
     _validate_enums_and_status(tables, issues)
+    _validate_search_budget(tables, issues)
     _validate_zarr(directory, tables.get("checkpoints"), issues)
     if "instances" in tables:
         from llm_search_dynamics.data.reference_validation import validate_knapsack_dataset

@@ -12,8 +12,6 @@ from llm_search_dynamics.data.splits import make_instance_split, read_split, wri
 from llm_search_dynamics.dynamics.transition import MarkovTransitionModel
 from llm_search_dynamics.evaluation.metrics import evaluate_trajectories
 from llm_search_dynamics.features.external import extract_external_features
-from llm_search_dynamics.generation.mock import MockGenerator
-from llm_search_dynamics.identifiers import instance_id
 from llm_search_dynamics.state_models.baseline import HammingDistanceStateModel
 from llm_search_dynamics.tasks.dummy_binary import DummyBinaryTask
 from llm_search_dynamics.tasks.registry import get_task
@@ -42,63 +40,6 @@ def test_dummy_task_contract_and_seed() -> None:
     assert task.is_terminal(task.initial_state(task.generate_instance(32))) is False
     with pytest.raises(ValueError, match="bit_count"):
         DummyBinaryTask(bit_count=0, max_steps=3)
-
-
-def test_mock_generator_is_seeded_tracks_initial_checkpoint_and_budget() -> None:
-    task = DummyBinaryTask(bit_count=6, max_steps=9)
-    instance = task.generate_instance(101)
-    identifier = instance_id(instance.to_dict())
-    greedy = MockGenerator(greedy_probability=1, max_steps=9)
-    arguments = {
-        "task": task,
-        "instance": instance,
-        "source_instance_id": identifier,
-        "experiment_conditions": {"strategy": "greedy"},
-        "sampling_seed": 8,
-    }
-    trial = greedy.generate(**arguments)
-    repeated = greedy.generate(**arguments)
-    assert trial.trial_id == repeated.trial_id
-    assert [point.checkpoint_id for point in trial.checkpoints] == [
-        point.checkpoint_id for point in repeated.checkpoints
-    ]
-    assert trial.success is True and trial.terminal_class == "success"
-    assert trial.status == "completed" and trial.error_type is None
-    indexes = [point.checkpoint_index for point in trial.checkpoints]
-    assert indexes == list(range(len(indexes)))
-    assert len({point.checkpoint_id for point in trial.checkpoints}) == len(indexes)
-    assert trial.checkpoints[0].action is None
-    budget = MockGenerator(greedy_probability=0, max_steps=1)
-    one_step_task = DummyBinaryTask(bit_count=6, max_steps=10)
-    trials = [
-        budget.generate(
-            task=one_step_task,
-            instance=one_step_task.generate_instance(101),
-            source_instance_id=identifier,
-            experiment_conditions={"strategy": "random"},
-            sampling_seed=seed,
-        )
-        for seed in range(8)
-    ]
-    assert len({result.checkpoints[-1].state.bits for result in trials}) > 1
-    assert all(len(result.checkpoints) <= 2 for result in trials)
-    assert all(result.terminal_class in {"success", "budget_exhausted"} for result in trials)
-
-    class BrokenTask(DummyBinaryTask):
-        def apply_action(self, state, action):
-            raise RuntimeError("failed search step")
-
-    broken = BrokenTask(bit_count=6, max_steps=10)
-    failed = budget.generate(
-        task=broken,
-        instance=broken.generate_instance(101),
-        source_instance_id=identifier,
-        experiment_conditions={"strategy": "random"},
-        sampling_seed=1,
-    )
-    assert failed.status == "failed"
-    assert failed.error_type == "RuntimeError"
-    assert failed.checkpoints[0].checkpoint_index == 0
 
 
 def test_instance_split_reproducibility_and_test_fit_guard(tmp_path: Path) -> None:

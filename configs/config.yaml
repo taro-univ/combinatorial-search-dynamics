@@ -2,8 +2,9 @@ defaults:
   - experiment: knapsack_pilot
   - task: knapsack
   - solver: ortools_cp_sat
-  - llm: mock
-  - generation: mock
+  - search_method: classical_comparison
+  - search: default
+  - features: success_prediction
   - observation: external_only
   - state_model: objective_gap
   - dynamics: markov

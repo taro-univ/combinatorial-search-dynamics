@@ -7,12 +7,13 @@ import numpy as np
 import pyarrow as pa
 
 from llm_search_dynamics.data.parquet import write_parquet
-from llm_search_dynamics.data.schemas import SCHEMA_VERSION, get_schema
+from llm_search_dynamics.data.schemas import get_schema
 from llm_search_dynamics.data.zarr import ObservationArray, write_observation_store
 from llm_search_dynamics.identifiers import checkpoint_id, instance_id, trial_id
 
 
 def make_tables() -> dict[str, pa.Table]:
+    schema_version = "2"
     instance = instance_id({"weights": [1, 2], "name": "小規模"})
     trial_a = trial_id(instance, {"temperature": 0.0}, 10)
     trial_b = trial_id(instance, {"temperature": 0.0}, 11)
@@ -24,7 +25,7 @@ def make_tables() -> dict[str, pa.Table]:
     rows = {
         "instances": [
             {
-                "schema_version": SCHEMA_VERSION,
+                "schema_version": schema_version,
                 "instance_id": instance,
                 "task_name": "placeholder",
                 "task_version": "1",
@@ -37,15 +38,17 @@ def make_tables() -> dict[str, pa.Table]:
         ],
         "trials": [
             {
-                "schema_version": SCHEMA_VERSION,
+                "schema_version": schema_version,
                 "trial_id": trial,
                 "instance_id": instance,
                 "experiment_id": "exp_pilot_fixture",
-                "llm_name": "fixture",
-                "llm_revision": None,
-                "sampling_seed": seed,
-                "temperature": 0.0,
-                "max_new_tokens": 16,
+                "search_method_name": "fixture_search",
+                "search_method_revision": "1",
+                "search_seed": seed,
+                "budget_type": "candidate_evaluations",
+                "budget_limit": 16,
+                "search_parameters_json": "{}",
+                "initial_state_json": "{}",
                 "terminal_class": "success",
                 "success": True,
                 "runtime_seconds": 0.1,
@@ -56,17 +59,20 @@ def make_tables() -> dict[str, pa.Table]:
         ],
         "checkpoints": [
             {
-                "schema_version": SCHEMA_VERSION,
+                "schema_version": schema_version,
                 "checkpoint_id": checkpoint,
                 "trial_id": trial,
-                "generated_token_index": token,
+                "budget_used": token,
                 "checkpoint_index": index,
-                "state_json": None,
-                "objective_value": None,
+                "decision_step": index,
+                "accepted_moves": index,
+                "rejected_moves": token - index,
+                "action_json": None if index == 0 else '{"accepted":true,"bit_index":0}',
+                "state_json": "{}",
+                "objective_value": float(index),
                 "optimality_gap": None,
                 "remaining_budget": 16 - token,
                 "is_terminal": terminal,
-                "parse_status": "not_applicable",
                 "tensor_ref": f"observations.zarr#{checkpoint}",
             }
             for checkpoint, trial, token, index, terminal in (
@@ -77,7 +83,7 @@ def make_tables() -> dict[str, pa.Table]:
         ],
         "metrics": [
             {
-                "schema_version": SCHEMA_VERSION,
+                "schema_version": schema_version,
                 "run_id": "run_fixture",
                 "split": split,
                 "fold": None,
@@ -90,7 +96,7 @@ def make_tables() -> dict[str, pa.Table]:
         ],
     }
     return {
-        name: pa.Table.from_pylist(table_rows, schema=get_schema(name))
+        name: pa.Table.from_pylist(table_rows, schema=get_schema(name, schema_version))
         for name, table_rows in rows.items()
     }
 
@@ -117,9 +123,8 @@ def write_dataset(path: Path, tables: dict[str, pa.Table] | None = None) -> dict
         make_observations(dataset),
         trial_ids=checkpoints.column("trial_id").to_pylist(),
         checkpoint_ids=checkpoints.column("checkpoint_id").to_pylist(),
-        generated_token_indices=checkpoints.column("generated_token_index").to_pylist(),
-        model_revision="fixture-model",
-        tokenizer_revision="fixture-tokenizer",
+        budget_used=checkpoints.column("budget_used").to_pylist(),
+        search_method_revision="fixture-search",
         observation_code_version="fixture-v1",
     )
     return dataset

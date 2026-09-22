@@ -11,7 +11,11 @@ from pathlib import Path
 import numpy as np
 import zarr
 
-from llm_search_dynamics.data.schemas import SCHEMA_VERSION, UnsupportedSchemaVersionError
+from llm_search_dynamics.data.schemas import (
+    SCHEMA_VERSION,
+    SUPPORTED_SCHEMA_VERSIONS,
+    UnsupportedSchemaVersionError,
+)
 
 ZARR_FORMAT = 3
 OBSERVATION_GROUPS = ("hidden", "attention_summary", "mlp_update", "kv_summary")
@@ -35,11 +39,26 @@ class ObservationStore:
     observations: dict[str, ObservationArray]
     trial_ids: tuple[str, ...]
     checkpoint_ids: tuple[str, ...]
-    generated_token_indices: np.ndarray
-    model_revision: str | None
-    tokenizer_revision: str | None
+    budget_used: np.ndarray
+    search_method_revision: str | None
+    legacy_tokenizer_revision: str | None
     observation_code_version: str
     observation_metadata: dict[str, str]
+
+    @property
+    def generated_token_indices(self) -> np.ndarray:
+        """Legacy alias for schema-v1 readers."""
+        return self.budget_used
+
+    @property
+    def model_revision(self) -> str | None:
+        """Legacy alias retained for schema-v1 callers."""
+        return self.search_method_revision
+
+    @property
+    def tokenizer_revision(self) -> str | None:
+        """Legacy tokenizer metadata has no classical-search equivalent."""
+        return self.legacy_tokenizer_revision
 
 
 def _chunks(shape: tuple[int, ...]) -> tuple[int, ...]:
@@ -50,7 +69,7 @@ def _validate_inputs(
     observations: dict[str, ObservationArray],
     trial_ids: list[str] | tuple[str, ...],
     checkpoint_ids: list[str] | tuple[str, ...],
-    generated_token_indices: list[int] | tuple[int, ...] | np.ndarray,
+    budget_used: list[int] | tuple[int, ...] | np.ndarray,
 ) -> None:
     if not observations:
         raise ZarrValidationError("At least one observation group is required")
@@ -67,7 +86,7 @@ def _validate_inputs(
         )
 
     count = len(trial_ids)
-    if len(checkpoint_ids) != count or len(generated_token_indices) != count:
+    if len(checkpoint_ids) != count or len(budget_used) != count:
         raise ZarrValidationError("All index arrays must have the same length")
     if any(not isinstance(value, str) or not value for value in trial_ids):
         raise ZarrValidationError("trial_id index values must be non-empty strings")
@@ -75,9 +94,9 @@ def _validate_inputs(
         raise ZarrValidationError("checkpoint_id index values must be non-empty strings")
     if any(
         isinstance(value, (bool, np.bool_)) or not isinstance(value, (int, np.integer)) or value < 0
-        for value in generated_token_indices
+        for value in budget_used
     ):
-        raise ZarrValidationError("generated_token_index values must be non-negative integers")
+        raise ZarrValidationError("budget_used values must be non-negative integers")
 
     for name, observation in observations.items():
         values = np.asarray(observation.values)
@@ -123,15 +142,14 @@ def write_observation_store(
     *,
     trial_ids: list[str] | tuple[str, ...],
     checkpoint_ids: list[str] | tuple[str, ...],
-    generated_token_indices: list[int] | tuple[int, ...] | np.ndarray,
+    budget_used: list[int] | tuple[int, ...] | np.ndarray,
     observation_code_version: str,
-    model_revision: str | None = None,
-    tokenizer_revision: str | None = None,
+    search_method_revision: str | None = None,
     observation_metadata: dict[str, str] | None = None,
     overwrite: bool = False,
 ) -> None:
     """Write a complete Zarr v3 store through a validated temporary directory."""
-    _validate_inputs(observations, trial_ids, checkpoint_ids, generated_token_indices)
+    _validate_inputs(observations, trial_ids, checkpoint_ids, budget_used)
     if not observation_code_version:
         raise ValueError("observation_code_version must be non-empty")
 
@@ -149,8 +167,7 @@ def write_observation_store(
                 "schema_version": SCHEMA_VERSION,
                 "zarr_format": ZARR_FORMAT,
                 "status": "writing",
-                "model_revision": model_revision,
-                "tokenizer_revision": tokenizer_revision,
+                "search_method_revision": search_method_revision,
                 "observation_code_version": observation_code_version,
                 "observation_metadata": observation_metadata or {},
             }
@@ -179,14 +196,14 @@ def write_observation_store(
         index = root.create_group("index")
         _create_index_array(index, "trial_id", list(trial_ids))
         _create_index_array(index, "checkpoint_id", list(checkpoint_ids))
-        token_indices = np.asarray(generated_token_indices, dtype=np.int64)
+        positions_array = np.asarray(budget_used, dtype=np.int64)
         index.create_array(
-            "generated_token_index",
-            data=token_indices,
-            chunks=(max(1, min(len(token_indices), 1024)),),
+            "budget_used",
+            data=positions_array,
+            chunks=(max(1, min(len(positions_array), 1024)),),
             dimension_names=("checkpoint",),
             attributes={
-                "shape": [len(token_indices)],
+                "shape": [len(positions_array)],
                 "axis_names": ["checkpoint"],
                 "dtype": "int64",
             },
@@ -235,7 +252,8 @@ def read_observation_store(path: Path) -> ObservationStore:
     attrs = dict(root.attrs)
     if root.metadata.zarr_format != ZARR_FORMAT:
         raise ZarrValidationError(f"Expected Zarr format {ZARR_FORMAT}")
-    if attrs.get("schema_version") != SCHEMA_VERSION:
+    version = str(attrs.get("schema_version", ""))
+    if version not in SUPPORTED_SCHEMA_VERSIONS:
         raise UnsupportedSchemaVersionError(
             f"Unsupported Zarr schema version: {attrs.get('schema_version', '<missing>')}"
         )
@@ -247,7 +265,8 @@ def read_observation_store(path: Path) -> ObservationStore:
         raise ZarrValidationError("Zarr index group is missing")
 
     index = root["index"]
-    required_indexes = ("trial_id", "checkpoint_id", "generated_token_index")
+    position_name = "generated_token_index" if version == "1" else "budget_used"
+    required_indexes = ("trial_id", "checkpoint_id", position_name)
     missing_indexes = [name for name in required_indexes if name not in index]
     if missing_indexes:
         raise ZarrValidationError(f"Missing Zarr indexes: {', '.join(missing_indexes)}")
@@ -263,9 +282,9 @@ def read_observation_store(path: Path) -> ObservationStore:
 
     trial_ids = tuple(str(value) for value in index["trial_id"][:].tolist())
     checkpoint_ids = tuple(str(value) for value in index["checkpoint_id"][:].tolist())
-    token_indices = np.asarray(index["generated_token_index"][:])
+    positions = np.asarray(index[position_name][:])
     count = len(trial_ids)
-    if len(checkpoint_ids) != count or len(token_indices) != count:
+    if len(checkpoint_ids) != count or len(positions) != count:
         raise ZarrValidationError("Zarr index arrays have different lengths")
 
     observations: dict[str, ObservationArray] = {}
@@ -298,16 +317,16 @@ def read_observation_store(path: Path) -> ObservationStore:
 
     if structural_issues:
         raise ZarrValidationError("; ".join(structural_issues))
-    _validate_inputs(observations, trial_ids, checkpoint_ids, token_indices)
+    _validate_inputs(observations, trial_ids, checkpoint_ids, positions)
     if not attrs.get("observation_code_version"):
         raise ZarrValidationError("observation_code_version root attribute is missing")
     return ObservationStore(
         observations=observations,
         trial_ids=trial_ids,
         checkpoint_ids=checkpoint_ids,
-        generated_token_indices=token_indices,
-        model_revision=attrs.get("model_revision"),
-        tokenizer_revision=attrs.get("tokenizer_revision"),
+        budget_used=positions,
+        search_method_revision=attrs.get("search_method_revision") or attrs.get("model_revision"),
+        legacy_tokenizer_revision=attrs.get("tokenizer_revision"),
         observation_code_version=str(attrs.get("observation_code_version", "")),
         observation_metadata={
             str(key): str(value) for key, value in attrs.get("observation_metadata", {}).items()

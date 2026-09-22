@@ -47,8 +47,9 @@ def build_pilot_report(
                 f"{summary.get('knapsack_final_relative_gap_mean', 'unavailable')}"
             ),
             (
-                f"- Best-so-far value / reached step: {summary['knapsack_best_so_far_value_mean']} / "
-                f"{summary.get('knapsack_optimal_reached_step_mean', 'unavailable')}"
+                "- Best-so-far value / evaluations used to reach optimum: "
+                f"{summary['knapsack_best_so_far_value_mean']} / "
+                f"{summary.get('knapsack_optimal_reached_budget_mean', 'unavailable')}"
             ),
             f"- Feasible checkpoint rate: {summary['knapsack_feasible_checkpoint_rate']:.6f}",
             (
@@ -71,7 +72,7 @@ def build_pilot_report(
                 f"- MLflow run ID: `{summary['run_id']}`",
                 f"- Config hash: `{summary['config_hash']}`",
                 f"- Task: `{summary['task']}`",
-                f"- Generator: `{summary['generator']}` (not an LLM adapter)",
+                f"- Search method: `{summary['search_method']}`",
                 (
                     f"- Instances / trials / checkpoints: {summary['instances']} / "
                     f"{summary['trials']} / {summary['checkpoints']}"

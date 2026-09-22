@@ -2,7 +2,7 @@
 
 ## Schema version
 
-現行schema versionは`1`であり、`src/llm_search_dynamics/data/schemas.py`で一元管理する。全Parquet tableは先頭列`schema_version: string non-null`とschema metadataの`schema_version`を持つ。metadataには`logical_table`も保存する。Zarr root attributesにも同じversionを保存する。versionが一致しないデータは読み替えずに拒否し、migrationは将来別機能として追加する。
+現行schema versionは`2`である。新規書込みはversion 2に限定し、旧version 1は読取り・検証互換を残す。全Parquet tableとZarr rootにversionを保存する。
 
 ## Logical tables
 
@@ -31,14 +31,16 @@ nullableと明記した列以外はnon-nullである。列順は以下の順序�
 | Column | Type | Nullable | Meaning |
 |---|---|---:|---|
 | schema_version | string | no | schema version |
-| trial_id | string | no | instance、条件、sampling seedから生成したID |
+| trial_id | string | no | instance、条件、search seedから生成したID |
 | instance_id | string | no | 対象instance |
 | experiment_id | string | no | 実験計画 |
-| llm_name | string | no | Phase 2では`mock_binary_search`。LLMではない |
-| llm_revision | string | yes | Phase 2ではmock generator revision |
-| sampling_seed | int64 | no | sampling seed |
-| temperature | float64 | no | Phase 2 mockでは探索確率`1 - greedy_probability` |
-| max_new_tokens | int64 | no | Phase 2 mockではstep budget |
+| search_method_name | string | no | 探索手法名 |
+| search_method_revision | string | yes | 探索実装revision |
+| search_seed | int64 | no | 探索乱数seed |
+| budget_type | string | no | `candidate_evaluations` |
+| budget_limit | int64 | no | 候補評価回数の上限 |
+| search_parameters_json | string | no | 解決済み探索パラメータ |
+| initial_state_json | string | no | 共通初期状態 |
 | terminal_class | string | no | 終端分類 |
 | success | bool | no | 最終成功 |
 | runtime_seconds | float64 | no | 実行時間 |
@@ -52,16 +54,19 @@ nullableと明記した列以外はnon-nullである。列順は以下の順序�
 | Column | Type | Nullable | Meaning |
 |---|---|---:|---|
 | schema_version | string | no | schema version |
-| checkpoint_id | string | no | trial IDとtoken位置から生成したID |
+| checkpoint_id | string | no | trial IDと記録順から生成したID |
 | trial_id | string | no | 対象trial |
-| generated_token_index | int64 | no | Phase 2 mockでは初期0からのstep位置 |
+| budget_used | int64 | no | 使用済み候補評価数 |
 | checkpoint_index | int64 | no | trial内連番 |
-| state_json | string | yes | 外部状態 |
-| objective_value | float64 | yes | 現在目的値 |
+| decision_step | int64 | no | 探索判断の回数 |
+| accepted_moves | int64 | no | 採用移動数 |
+| rejected_moves | int64 | no | 棄却候補数 |
+| action_json | string | yes | 直前候補と採否 |
+| state_json | string | no | 外部状態 |
+| objective_value | float64 | no | 現在目的値 |
 | optimality_gap | float64 | yes | 最適性gap |
-| remaining_budget | int64 | no | 残りtoken数 |
+| remaining_budget | int64 | no | 残り候補評価数 |
 | is_terminal | bool | no | 終端か |
-| parse_status | string | no | 状態復元結果 |
 | tensor_ref | string | yes | Zarr上の参照 |
 
 ### metrics
@@ -81,9 +86,9 @@ metricを縦持ちで保存する。仕様上、単一列の主キーは定義�
 
 ## Parquet and Zarr correspondence
 
-Parquetは試行メタデータと表形式の正本であり、Zstandard圧縮を使う。Zarrはhidden、attention summary、MLP update、KV summaryの多次元配列を保存し、値と`valid_mask`を分離する。Phase 2では後方互換の追加group `external_state`だけに現在のbit vectorとboolean maskを保存する。rootの`observation_metadata`には`mock`と`external-only`を記録し、内部状態用groupは偽造しない。
+Parquetは試行メタデータと表形式の正本であり、Zstandard圧縮を使う。Zarrの`external_state`には現在のbit vectorとboolean maskを保存する。root metadataのsourceは`classical_search`である。
 
-Zarrの`index/checkpoint_id`、`index/trial_id`、`index/generated_token_index`をParquetの同名列と照合する。配列の保存順やParquetの行番号だけでjoinしない。各観測配列の先頭軸はcheckpointで、index配列の長さと一致する。
+Zarrの`index/checkpoint_id`、`index/trial_id`、`index/budget_used`をParquetの同名列と照合する。version 1では最後の列名が`generated_token_index`である。
 
 ## Data layers
 
@@ -101,13 +106,17 @@ test metricsは`one_step_nll`（観測次状態確率を最低`1e-12`にclipし�
 
 4つのParquetは同名のDuckDB viewとして直接参照できる。`analysis_checkpoints`は`instances.instance_id = trials.instance_id`、`trials.trial_id = checkpoints.trial_id`でjoinし、checkpointごとの問題条件・trial条件・状態を横断分析する。metricsは多対多化による行数増加を避けるため、このviewには含めない。
 
+## Success-analysis tables
+
+`success_features.parquet`は非終端checkpointごとにB2、M2、M3、目的変数、split、探索手法、trial内重みを持つ。`instance_features.parquet`はsamplingで測る問題特徴を状態特徴から分離する。`success_predictions.parquet`は固定後のtestについてB2、選択済みM2、最終モデルの確率を保存する。3表は`analysis_version` metadataを持ち、rawではなくderivedへ置く。
+
 ## Phase 3 optional extension: reference_solutions
 
-Phase 1の4必須表とschema version `1`は変更しない。ナップサックdatasetに限り`reference_solutions.parquet`を同じraw snapshotに要求する。`reference_id`は`instance_id`、solver名/version、全parameter、solve seedのcanonical JSONから生成する安定IDである。同じ条件の行は複合キー`(instance_id, solver_name, solver_version, solver_parameters_json, solve_seed)`でも一意にする。1つのdataset snapshot内ではinstanceごとに1つの参照条件だけを認め、異なる条件が混在すると曖昧なjoinとして拒否する。外部キーは`instance_id → instances.instance_id`。
+ナップサックdatasetでは`reference_solutions.parquet`を同じraw snapshotに要求する。`reference_id`は`instance_id`、solver名/version、全parameter、solve seedから生成する。
 
 | Column | Type | Nullable | Meaning |
 |---|---|---:|---|
-| schema_version | string | no | 現行`1` |
+| schema_version | string | no | 現行`2` |
 | reference_id | string | no | 安定した参照結果ID |
 | instance_id | string | no | 対象instanceの外部キー |
 | task_name | string | no | `knapsack` |
@@ -132,4 +141,4 @@ Parquet schema metadataには`logical_table=reference_solutions`と`schema_versi
 
 ナップサックinstanceの`instance_json`はweights、values、capacity、item_count、generation seed、task名/versionを持つ。checkpointの`state_json`はselected vector、total weight/value、step等を持ち、capacity、actionによる遷移、再計算値を検査する。`objective_value`は現在のtotal value。rawには4必須表、参照表、external-only Zarrを配置し、interimは復元済みtrajectory、derivedは特徴/split/状態/評価値、artifactsはmodel/report/provenanceを持つ。
 
-問題固有のtest metricsは`knapsack_success_rate_trial`（n_units=trial数）、`knapsack_success_rate_instance`（instance数）、`knapsack_final_value_mean`と`knapsack_best_so_far_value_mean`（trial数）、`knapsack_final_absolute_gap_mean`と`knapsack_final_relative_gap_mean`（証明済み参照を持つtrial数）、`knapsack_optimal_reached_step_mean`（到達trial数）、`knapsack_feasible_checkpoint_rate`（checkpoint数）、`solver_timeout_rate_test`と`solver_optimality_proven_rate_test`（test instance数）である。既存Markov予測指標の`n_units`はtransition数、件数metricの`n_units`は1のままである。timeout/未証明instanceはsolver率の分母から落とさない。
+問題固有のtest metricsは`knapsack_success_rate_trial`（n_units=trial数）、`knapsack_success_rate_instance`（instance数）、`knapsack_final_value_mean`と`knapsack_best_so_far_value_mean`（trial数）、`knapsack_final_absolute_gap_mean`と`knapsack_final_relative_gap_mean`（証明済み参照を持つtrial数）、`knapsack_optimal_reached_budget_mean`（到達trial数）、`knapsack_feasible_checkpoint_rate`（checkpoint数）、`solver_timeout_rate_test`と`solver_optimality_proven_rate_test`（test instance数）である。到達budgetは最適解を最初に記録した時点の候補評価数である。

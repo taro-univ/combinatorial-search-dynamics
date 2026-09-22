@@ -18,6 +18,7 @@ def test_dvc_graph_is_local_acyclic_and_stage_complete() -> None:
         "extract_features",
         "make_splits",
         "fit_model",
+        "analyze_success",
         "evaluate_model",
         "build_report",
     ]

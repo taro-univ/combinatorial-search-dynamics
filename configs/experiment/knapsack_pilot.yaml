@@ -4,7 +4,8 @@ description: CPU-only 0-1 knapsack pipeline validation; not a confirmatory resea
 instance_count: 9
 seed:
   instance_generation: 1100
-  llm_sampling: 1200
+  initial_state: 1200
+  search: 1250
   data_split: 1300
   representation: 1400
   dynamics: 1500
