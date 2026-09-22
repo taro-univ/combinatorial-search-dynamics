@@ -104,7 +104,7 @@ Phase 2のdummy回帰は別pathを使います。既存出力がある場合は�
 uv run lsd reproduce-pilot experiment=pilot task=dummy_binary solver=none state_model=baseline storage=local tracking=local
 ```
 
-既定`dvc.yaml`はPhase 3の9 stage graphです。Phase 2 dummy回帰は上記のHydra override付きCLIと自動テストで維持します。DVCは固定された既定pathを使うため、CLIのpath overrideはDVC graphへ反映されません。生成物はナップサックなら`data/raw/knapsack_pilot/`、`data/interim/knapsack_pilot/`、`data/derived/knapsack_pilot/`、`artifacts/knapsack_pilot/`、MLflowは`mlruns/`に置かれます。LLM接続、prompt versioning、内部状態、Optuna、nested CV、本評価はPhase 4以降です。
+既定`dvc.yaml`はPhase 3の10 stage graphです。Phase 2 dummy回帰は上記のHydra override付きCLIと自動テストで維持します。DVCは固定された既定pathを使うため、CLIのpath overrideはDVC graphへ反映されません。生成物はナップサックなら`data/raw/knapsack_pilot/`、`data/interim/knapsack_pilot/`、`data/derived/knapsack_pilot/`、`artifacts/knapsack_pilot/`、MLflowは`mlruns/`に置かれます。
 
 ## Codex CLIについて
 

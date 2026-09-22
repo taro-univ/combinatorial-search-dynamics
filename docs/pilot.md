@@ -12,7 +12,7 @@ Phase 2 dummy回帰はHydra override付きCLIと自動テストで維持し、�
 
 ## Phase 3 knapsack pilot
 
-この文書の上段はPhase 2時点のdummy手順である。Phase 2 pipelineは`uv run lsd reproduce-pilot experiment=pilot task=dummy_binary solver=none state_model=baseline storage=local tracking=local`で再実行する。Phase 3の既定`dvc.yaml`は9 stageで、`generate_instances → solve_references → collect_trajectories`を含む。
+この文書の上段はPhase 2時点のdummy手順である。Phase 2 pipelineは`uv run lsd reproduce-pilot experiment=pilot task=dummy_binary solver=none search_method=randomized_first_improvement state_model=baseline storage=local tracking=local`で再実行する。Phase 3の既定`dvc.yaml`は成功分析を含む10 stageである。
 
 ナップサックpilotは`uv run dvc repro`または`uv run lsd reproduce-pilot experiment=knapsack_pilot task=knapsack solver=ortools_cp_sat state_model=objective_gap`で実行する。rawのPhase 1必須4表とZarr、任意拡張の参照表は`data/raw/knapsack_pilot/`、評価は`data/derived/knapsack_pilot/metrics.parquet`、reportは`artifacts/knapsack_pilot/report.md`に置く。`uv run lsd validate-data --data-dir data/raw/knapsack_pilot`でfeasibility、solver結果、checkpoint gapまで検査する。solver単体はinstances生成後に`uv run lsd solve-references experiment=knapsack_pilot task=knapsack solver=ortools_cp_sat`を実行する。
 

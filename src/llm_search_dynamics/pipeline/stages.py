@@ -560,6 +560,8 @@ def _analyze_success(config: dict[str, Any], paths: PilotPaths) -> None:
     )
     for row in (*feature_rows, *instance_rows):
         row["analysis_version"] = analysis_version
+    for row in instance_rows:
+        row["calculation_version"] = analysis_version
     settings = {
         **config["evaluation"]["success_prediction"],
         "probability_floor": config["evaluation"]["probability_floor"],

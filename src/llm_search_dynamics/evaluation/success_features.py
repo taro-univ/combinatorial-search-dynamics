@@ -271,14 +271,16 @@ def run_feature_selection(
         if not train or not validation or not test:
             raise ValueError(f"Search method {method} has an empty split")
         singles: dict[str, Any] = {}
+        single_models: dict[str, Any] = {}
         for candidate in (*M2_FEATURES, *M3_FEATURES):
-            _, metrics, _ = _fit_and_evaluate(
+            single_model, metrics, _ = _fit_and_evaluate(
                 train, validation, (*B2_FEATURES, candidate), settings
             )
             singles[candidate] = {
                 "features": [*B2_FEATURES, candidate],
                 "validation_metrics": metrics,
             }
+            single_models[candidate] = single_model.to_dict()
         selected_m2, m2_history = _forward_select(
             train_rows=train,
             validation_rows=validation,
@@ -342,7 +344,7 @@ def run_feature_selection(
                     "selected_final_probability": float(probabilities["selected_final"][row_index]),
                 }
             )
-        models[method] = method_models
+        models[method] = {**method_models, "single_additions": single_models}
         selections[method] = {
             "single_additions": singles,
             "m2_forward_history": m2_history,

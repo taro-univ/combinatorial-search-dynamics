@@ -32,7 +32,7 @@ MLflowはlocal file storeにrun・parameter・metric・tag・artifactを記録�
 
 ## Phase 3: knapsack reference pipeline
 
-`configs/config.yaml`の既定はknapsack pilotで、solver groupを追加した。ルートの`dvc.yaml`はPhase 3の9 stageを持つ。Phase 2 dummy回帰はHydra override付きCLIと自動テストで維持し、追加のルート階層やDVC graphは作らない。solve_referencesはinstancesとtask/solver設定から`reference_solutions.parquet`を作る。collect以降はこの参照表に明示的に依存する。solver設定だけの変更はsolve_references以降、instance生成条件の変更はgenerate_instances以降、report体裁だけの変更はbuild_reportを再実行する。DVCの固定pathはHydra storageの既定pathを投影したもので、CLIのpath overrideはDVC graphへ反映されない。
+`configs/config.yaml`の既定はknapsack pilotである。ルートの`dvc.yaml`は成功分析を含むPhase 3の10 stageを持つ。solve_referencesはinstancesとtask/solver設定から`reference_solutions.parquet`を作り、collect以降はこの参照表へ明示的に依存する。
 
 `data/raw/knapsack_pilot/`はPhase 1の4表、Zarrと任意拡張表`reference_solutions.parquet`を同居させた単一snapshotである。knapsackと判定した場合だけ参照表を必須とし、dummyの4表/Zarr snapshotはそのまま受理する。raw metricsは空schema、実評価値はderivedに置く。Zarrは選択中item vectorの`external_state`を保存し、LLM内部状態を偽造しない。参照とtrialは`instance_id`、trialとcheckpointは`trial_id`で結合する。
 
