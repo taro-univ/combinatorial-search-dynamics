@@ -24,3 +24,6 @@ venv/
 .DS_Store
 .vscode/
 *.swp
+
+# AI系
+AGENTS.md
