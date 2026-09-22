@@ -28,7 +28,7 @@ testデータは構成の選択、前処理のfit、仮説の修正に使わず�
 
 ## Seeds and reproduction
 
-`configs/experiment/pilot.yaml`がinstance生成100、mock sampling 200、分割300、表現400、力学500の用途別seedの正本である。表現・力学は決定的でseedを記録するだけで乱数は使わない。Python 3.11で`uv sync --all-extras --locked`し、隔離pathで`lsd reproduce-pilot`と`lsd validate-data --data-dir <raw>`を実行する。既定pathなら`dvc repro`を使い、2回目のskipを確認する。詳細は[pilot手順](pilot.md)。
+`configs/experiment/pilot.yaml`がinstance生成100、mock sampling 200、分割300、表現400、力学500の用途別seedの正本である。表現・力学は決定的でseedを記録するだけで乱数は使わない。Python 3.11で`uv sync --all-extras --locked`し、隔離pathで`csd reproduce-pilot`と`csd validate-data --data-dir <raw>`を実行する。既定pathなら`dvc repro`を使い、2回目のskipを確認する。詳細は[pilot手順](pilot.md)。
 
 ## Phase 3 knapsack pilot protocol
 
@@ -40,4 +40,4 @@ instance生成条件の正本は`configs/task/knapsack.yaml`で、既定は6 ite
 
 状態表現は証明済みoptimal値に対する現在の相対gapを事前固定binへ割り当て、gap 0を吸収状態0とする。一次Markovモデルはtrain trajectoryのみからfitする。held-out testではone-step NLL、next-state accuracy、success-state Brierをtransition平均で算出する。問題固有にはtrial/instance success rate、最終価値、最終absolute/relative gap、best-so-far価値、最適到達step、feasible checkpoint率、solver status件数、timeout率、証明率を出す。gapの分母は証明済みinstanceのみで、単位と計算式は[data dictionary](data-dictionary.md)に記す。solver runtimeとmock探索runtimeは別に扱う。
 
-再現手順はPython 3.11で`uv sync --all-extras --locked`し、隔離pathを指定した`lsd reproduce-pilot experiment=knapsack_pilot task=knapsack solver=ortools_cp_sat state_model=objective_gap`、続いて`lsd validate-data --data-dir <raw>`を実行する。既定pathのDVC graphなら`dvc repro`を実行し、2回目で不要なstageがskipされることを確認する。dummy回帰は`lsd reproduce-pilot experiment=pilot task=dummy_binary solver=none state_model=baseline storage=local tracking=local`と自動テストで確認する。実研究の研究質問、仮説、主要比較、test評価の回数はpilotから流用せず事前登録する。
+再現手順はPython 3.11で`uv sync --all-extras --locked`し、隔離pathを指定した`csd reproduce-pilot experiment=knapsack_pilot task=knapsack solver=ortools_cp_sat state_model=objective_gap`、続いて`csd validate-data --data-dir <raw>`を実行する。既定pathのDVC graphなら`dvc repro`を実行し、2回目で不要なstageがskipされることを確認する。dummy回帰は`csd reproduce-pilot experiment=pilot task=dummy_binary solver=none state_model=baseline storage=local tracking=local`と自動テストで確認する。実研究の研究質問、仮説、主要比較、test評価の回数はpilotから流用せず事前登録する。

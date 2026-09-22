@@ -1,7 +1,7 @@
 import pyarrow as pa
 import pytest
 
-from llm_search_dynamics.data.schemas import (
+from combinatorial_search_dynamics.data.schemas import (
     SCHEMA_VERSION,
     TABLE_NAMES,
     UnsupportedSchemaVersionError,

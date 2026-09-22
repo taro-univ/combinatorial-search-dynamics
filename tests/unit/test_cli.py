@@ -2,7 +2,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from llm_search_dynamics.cli import app, read_env, repo_root
+from combinatorial_search_dynamics.cli import app, read_env, repo_root
 
 
 def test_repository_root_is_found() -> None:

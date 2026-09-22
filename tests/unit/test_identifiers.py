@@ -2,7 +2,12 @@ import math
 
 import pytest
 
-from llm_search_dynamics.identifiers import artifact_id, checkpoint_id, instance_id, trial_id
+from combinatorial_search_dynamics.identifiers import (
+    artifact_id,
+    checkpoint_id,
+    instance_id,
+    trial_id,
+)
 
 
 def test_instance_id_ignores_dict_key_order() -> None:

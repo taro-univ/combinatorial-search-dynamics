@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pyarrow as pa
 
-from llm_search_dynamics.config import resolved_config
-from llm_search_dynamics.data.parquet import read_parquet
-from llm_search_dynamics.data.reference_validation import validate_knapsack_dataset
-from llm_search_dynamics.data.schemas import get_schema
-from llm_search_dynamics.pipeline.stages import PilotPaths, reproduce_pilot
+from combinatorial_search_dynamics.config import resolved_config
+from combinatorial_search_dynamics.data.parquet import read_parquet
+from combinatorial_search_dynamics.data.reference_validation import validate_knapsack_dataset
+from combinatorial_search_dynamics.data.schemas import get_schema
+from combinatorial_search_dynamics.pipeline.stages import PilotPaths, reproduce_pilot
 from tests.integration.test_knapsack_pipeline import knapsack_overrides
 
 

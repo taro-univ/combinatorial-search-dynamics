@@ -1,7 +1,7 @@
 [project]
-name = "llm-search-dynamics"
+name = "combinatorial-search-dynamics"
 version = "0.1.0"
-description = "Research platform for LLM search dynamics experiments"
+description = "Research platform for combinatorial search dynamics experiments"
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
 dependencies = [
@@ -23,7 +23,7 @@ dev = [
 ]
 
 [project.scripts]
-lsd = "llm_search_dynamics.cli:main"
+csd = "combinatorial_search_dynamics.cli:main"
 
 [build-system]
 requires = ["hatchling>=1.18.0"]

@@ -1,35 +1,35 @@
 stages:
   generate_instances:
-    cmd: uv run lsd generate-instances --force
+    cmd: uv run csd generate-instances --force
     deps:
       - configs/config.yaml
       - configs/experiment/knapsack_pilot.yaml
       - configs/task/knapsack.yaml
       - configs/storage/knapsack_local.yaml
-      - src/llm_search_dynamics/tasks/knapsack.py
-      - src/llm_search_dynamics/tasks/registry.py
-      - src/llm_search_dynamics/identifiers.py
-      - src/llm_search_dynamics/pipeline/stages.py
+      - src/combinatorial_search_dynamics/tasks/knapsack.py
+      - src/combinatorial_search_dynamics/tasks/registry.py
+      - src/combinatorial_search_dynamics/identifiers.py
+      - src/combinatorial_search_dynamics/pipeline/stages.py
     outs:
       - data/raw/knapsack_pilot/instances.parquet
   solve_references:
-    cmd: uv run lsd solve-references --force
+    cmd: uv run csd solve-references --force
     deps:
       - data/raw/knapsack_pilot/instances.parquet
       - configs/task/knapsack.yaml
       - configs/solver/ortools_cp_sat.yaml
       - configs/storage/knapsack_local.yaml
-      - src/llm_search_dynamics/solvers/base.py
-      - src/llm_search_dynamics/solvers/registry.py
-      - src/llm_search_dynamics/solvers/ortools_knapsack.py
-      - src/llm_search_dynamics/data/schemas.py
-      - src/llm_search_dynamics/data/references.py
-      - src/llm_search_dynamics/data/reference_validation.py
-      - src/llm_search_dynamics/pipeline/stages.py
+      - src/combinatorial_search_dynamics/solvers/base.py
+      - src/combinatorial_search_dynamics/solvers/registry.py
+      - src/combinatorial_search_dynamics/solvers/ortools_knapsack.py
+      - src/combinatorial_search_dynamics/data/schemas.py
+      - src/combinatorial_search_dynamics/data/references.py
+      - src/combinatorial_search_dynamics/data/reference_validation.py
+      - src/combinatorial_search_dynamics/pipeline/stages.py
     outs:
       - data/raw/knapsack_pilot/reference_solutions.parquet
   collect_trajectories:
-    cmd: uv run lsd collect --force
+    cmd: uv run csd collect --force
     deps:
       - data/raw/knapsack_pilot/instances.parquet
       - data/raw/knapsack_pilot/reference_solutions.parquet
@@ -43,21 +43,21 @@ stages:
       - configs/experiment/knapsack_pilot.yaml
       - configs/task/knapsack.yaml
       - configs/storage/knapsack_local.yaml
-      - src/llm_search_dynamics/search/base.py
-      - src/llm_search_dynamics/search/algorithms.py
-      - src/llm_search_dynamics/search/initialization.py
-      - src/llm_search_dynamics/search/registry.py
-      - src/llm_search_dynamics/data/parquet.py
-      - src/llm_search_dynamics/data/schemas.py
-      - src/llm_search_dynamics/data/zarr.py
-      - src/llm_search_dynamics/pipeline/stages.py
+      - src/combinatorial_search_dynamics/search/base.py
+      - src/combinatorial_search_dynamics/search/algorithms.py
+      - src/combinatorial_search_dynamics/search/initialization.py
+      - src/combinatorial_search_dynamics/search/registry.py
+      - src/combinatorial_search_dynamics/data/parquet.py
+      - src/combinatorial_search_dynamics/data/schemas.py
+      - src/combinatorial_search_dynamics/data/zarr.py
+      - src/combinatorial_search_dynamics/pipeline/stages.py
     outs:
       - data/raw/knapsack_pilot/trials.parquet
       - data/raw/knapsack_pilot/checkpoints.parquet
       - data/raw/knapsack_pilot/observations.zarr
       - data/raw/knapsack_pilot/metrics.parquet
   prepare_trajectories:
-    cmd: uv run lsd prepare --force
+    cmd: uv run csd prepare --force
     deps:
       - data/raw/knapsack_pilot/instances.parquet
       - data/raw/knapsack_pilot/trials.parquet
@@ -65,50 +65,50 @@ stages:
       - data/raw/knapsack_pilot/observations.zarr
       - data/raw/knapsack_pilot/metrics.parquet
       - data/raw/knapsack_pilot/reference_solutions.parquet
-      - src/llm_search_dynamics/data/validation.py
-      - src/llm_search_dynamics/data/reference_validation.py
-      - src/llm_search_dynamics/pipeline/stages.py
+      - src/combinatorial_search_dynamics/data/validation.py
+      - src/combinatorial_search_dynamics/data/reference_validation.py
+      - src/combinatorial_search_dynamics/pipeline/stages.py
     outs:
       - data/interim/knapsack_pilot/trajectories.json
   extract_features:
-    cmd: uv run lsd extract --force
+    cmd: uv run csd extract --force
     deps:
       - data/interim/knapsack_pilot/trajectories.json
       - data/raw/knapsack_pilot/reference_solutions.parquet
       - configs/observation/external_only.yaml
-      - src/llm_search_dynamics/features/external.py
-      - src/llm_search_dynamics/pipeline/stages.py
+      - src/combinatorial_search_dynamics/features/external.py
+      - src/combinatorial_search_dynamics/pipeline/stages.py
     outs:
       - data/derived/knapsack_pilot/features.json
   make_splits:
-    cmd: uv run lsd split --force
+    cmd: uv run csd split --force
     deps:
       - data/derived/knapsack_pilot/features.json
       - data/raw/knapsack_pilot/instances.parquet
       - configs/experiment/knapsack_pilot.yaml
       - configs/evaluation/default.yaml
-      - src/llm_search_dynamics/data/splits.py
-      - src/llm_search_dynamics/pipeline/stages.py
+      - src/combinatorial_search_dynamics/data/splits.py
+      - src/combinatorial_search_dynamics/pipeline/stages.py
     outs:
       - data/derived/knapsack_pilot/splits.json
   fit_model:
-    cmd: uv run lsd fit --force
+    cmd: uv run csd fit --force
     deps:
       - data/derived/knapsack_pilot/features.json
       - data/derived/knapsack_pilot/splits.json
       - data/raw/knapsack_pilot/reference_solutions.parquet
       - configs/state_model/objective_gap.yaml
       - configs/dynamics/markov.yaml
-      - src/llm_search_dynamics/state_models/objective_gap.py
-      - src/llm_search_dynamics/state_models/registry.py
-      - src/llm_search_dynamics/dynamics/transition.py
-      - src/llm_search_dynamics/pipeline/stages.py
+      - src/combinatorial_search_dynamics/state_models/objective_gap.py
+      - src/combinatorial_search_dynamics/state_models/registry.py
+      - src/combinatorial_search_dynamics/dynamics/transition.py
+      - src/combinatorial_search_dynamics/pipeline/stages.py
     outs:
       - artifacts/knapsack_pilot/state_model.json
       - artifacts/knapsack_pilot/dynamics_model.json
       - data/derived/knapsack_pilot/state_assignments.json
   analyze_success:
-    cmd: uv run lsd analyze-success --force
+    cmd: uv run csd analyze-success --force
     deps:
       - data/raw/knapsack_pilot/instances.parquet
       - data/raw/knapsack_pilot/trials.parquet
@@ -118,9 +118,9 @@ stages:
       - configs/features/success_prediction.yaml
       - configs/evaluation/default.yaml
       - configs/experiment/knapsack_pilot.yaml
-      - src/llm_search_dynamics/features/success.py
-      - src/llm_search_dynamics/evaluation/success_features.py
-      - src/llm_search_dynamics/pipeline/stages.py
+      - src/combinatorial_search_dynamics/features/success.py
+      - src/combinatorial_search_dynamics/evaluation/success_features.py
+      - src/combinatorial_search_dynamics/pipeline/stages.py
     outs:
       - data/derived/knapsack_pilot/success_features.parquet
       - data/derived/knapsack_pilot/instance_features.parquet
@@ -131,7 +131,7 @@ stages:
       - artifacts/knapsack_pilot/success_feature_comparison.md
       - artifacts/knapsack_pilot/success_analysis_config.json
   evaluate_model:
-    cmd: uv run lsd evaluate --force
+    cmd: uv run csd evaluate --force
     deps:
       - data/derived/knapsack_pilot/state_assignments.json
       - data/derived/knapsack_pilot/splits.json
@@ -145,11 +145,11 @@ stages:
       - data/raw/knapsack_pilot/reference_solutions.parquet
       - configs/evaluation/default.yaml
       - configs/tracking/knapsack_local.yaml
-      - src/llm_search_dynamics/evaluation/metrics.py
-      - src/llm_search_dynamics/evaluation/knapsack.py
-      - src/llm_search_dynamics/provenance.py
-      - src/llm_search_dynamics/tracking/mlflow.py
-      - src/llm_search_dynamics/pipeline/stages.py
+      - src/combinatorial_search_dynamics/evaluation/metrics.py
+      - src/combinatorial_search_dynamics/evaluation/knapsack.py
+      - src/combinatorial_search_dynamics/provenance.py
+      - src/combinatorial_search_dynamics/tracking/mlflow.py
+      - src/combinatorial_search_dynamics/pipeline/stages.py
     outs:
       - data/derived/knapsack_pilot/metrics.parquet
       - data/derived/knapsack_pilot/predictions.json
@@ -162,7 +162,7 @@ stages:
       - artifacts/knapsack_pilot/solver_status_summary.json
       - artifacts/knapsack_pilot/feasible_check.json
   build_report:
-    cmd: uv run lsd report --force
+    cmd: uv run csd report --force
     deps:
       - data/derived/knapsack_pilot/evaluation_summary.json
       - data/derived/knapsack_pilot/splits.json
@@ -171,8 +171,8 @@ stages:
       - data/raw/knapsack_pilot/checkpoints.parquet
       - data/raw/knapsack_pilot/reference_solutions.parquet
       - artifacts/knapsack_pilot/run.json
-      - src/llm_search_dynamics/reporting/tables.py
-      - src/llm_search_dynamics/pipeline/stages.py
+      - src/combinatorial_search_dynamics/reporting/tables.py
+      - src/combinatorial_search_dynamics/pipeline/stages.py
     outs:
       - artifacts/knapsack_pilot/report.md
       - artifacts/knapsack_pilot/summary.csv

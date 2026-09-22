@@ -9,12 +9,12 @@ import mlflow
 import pyarrow.parquet as pq
 from typer.testing import CliRunner
 
-from llm_search_dynamics.cli import app
-from llm_search_dynamics.config import resolved_config
-from llm_search_dynamics.data.duckdb import create_analysis_views
-from llm_search_dynamics.data.splits import read_split
-from llm_search_dynamics.data.validation import validate_dataset
-from llm_search_dynamics.pipeline.stages import PilotPaths
+from combinatorial_search_dynamics.cli import app
+from combinatorial_search_dynamics.config import resolved_config
+from combinatorial_search_dynamics.data.duckdb import create_analysis_views
+from combinatorial_search_dynamics.data.splits import read_split
+from combinatorial_search_dynamics.data.validation import validate_dataset
+from combinatorial_search_dynamics.pipeline.stages import PilotPaths
 
 
 def knapsack_overrides(directory: Path) -> list[str]:

@@ -7,7 +7,7 @@ Accepted
 作業ディレクトリから偶然importできる状態を避け、インストールされたパッケージをテストしたい。
 
 ## Decision
-Pythonパッケージを`src/llm_search_dynamics`以下に配置し、Hatchlingでビルドする。
+Pythonパッケージを`src/combinatorial_search_dynamics`以下に配置し、Hatchlingでビルドする。
 
 ## Alternatives
 リポジトリ直下にパッケージを置くflat layoutを検討した。

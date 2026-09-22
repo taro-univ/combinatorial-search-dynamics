@@ -4,19 +4,19 @@ import math
 
 import pytest
 
-from llm_search_dynamics.evaluation.success_features import (
+from combinatorial_search_dynamics.evaluation.success_features import (
     evaluate_predictions,
     fit_logistic,
     run_feature_selection,
 )
-from llm_search_dynamics.features.success import (
+from combinatorial_search_dynamics.features.success import (
     B2_FEATURES,
     build_instance_feature_rows,
     build_success_feature_rows,
     nearest_optimal_distance,
     neighborhood_features,
 )
-from llm_search_dynamics.tasks.knapsack import KnapsackInstance
+from combinatorial_search_dynamics.tasks.knapsack import KnapsackInstance
 
 
 def instance() -> KnapsackInstance:

@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 import zarr
 
-from llm_search_dynamics.data.schemas import UnsupportedSchemaVersionError
-from llm_search_dynamics.data.zarr import (
+from combinatorial_search_dynamics.data.schemas import UnsupportedSchemaVersionError
+from combinatorial_search_dynamics.data.zarr import (
     OBSERVATION_GROUPS,
     ObservationArray,
     ZarrValidationError,

@@ -1,4 +1,4 @@
-from llm_search_dynamics.config import repository_root, validate_repository
+from combinatorial_search_dynamics.config import repository_root, validate_repository
 
 
 def test_repository_validation_succeeds() -> None:

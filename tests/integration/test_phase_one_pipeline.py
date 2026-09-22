@@ -1,8 +1,8 @@
 from typer.testing import CliRunner
 
-from llm_search_dynamics.cli import app
-from llm_search_dynamics.data.duckdb import create_analysis_views
-from llm_search_dynamics.data.validation import validate_dataset
+from combinatorial_search_dynamics.cli import app
+from combinatorial_search_dynamics.data.duckdb import create_analysis_views
+from combinatorial_search_dynamics.data.validation import validate_dataset
 from tests.helpers import write_dataset
 
 

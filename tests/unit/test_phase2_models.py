@@ -8,13 +8,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from llm_search_dynamics.data.splits import make_instance_split, read_split, write_split
-from llm_search_dynamics.dynamics.transition import MarkovTransitionModel
-from llm_search_dynamics.evaluation.metrics import evaluate_trajectories
-from llm_search_dynamics.features.external import extract_external_features
-from llm_search_dynamics.state_models.baseline import HammingDistanceStateModel
-from llm_search_dynamics.tasks.dummy_binary import DummyBinaryTask
-from llm_search_dynamics.tasks.registry import get_task
+from combinatorial_search_dynamics.data.splits import make_instance_split, read_split, write_split
+from combinatorial_search_dynamics.dynamics.transition import MarkovTransitionModel
+from combinatorial_search_dynamics.evaluation.metrics import evaluate_trajectories
+from combinatorial_search_dynamics.features.external import extract_external_features
+from combinatorial_search_dynamics.state_models.baseline import HammingDistanceStateModel
+from combinatorial_search_dynamics.tasks.dummy_binary import DummyBinaryTask
+from combinatorial_search_dynamics.tasks.registry import get_task
 
 
 def test_dummy_task_contract_and_seed() -> None:

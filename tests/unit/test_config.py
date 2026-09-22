@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from llm_search_dynamics.config import CONFIG_GROUPS, compose_config, resolved_config
+from combinatorial_search_dynamics.config import CONFIG_GROUPS, compose_config, resolved_config
 
 
 def test_default_hydra_composition_succeeds() -> None:

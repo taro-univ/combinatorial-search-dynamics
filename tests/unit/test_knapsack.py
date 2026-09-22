@@ -10,22 +10,22 @@ import pyarrow.parquet as pq
 import pytest
 from ortools.sat.python import cp_model
 
-from llm_search_dynamics.data.parquet import read_parquet, write_parquet
-from llm_search_dynamics.data.reference_validation import validate_references
-from llm_search_dynamics.data.references import reference_row
-from llm_search_dynamics.data.schemas import SCHEMA_VERSION, get_schema
-from llm_search_dynamics.identifiers import canonical_json, instance_id
-from llm_search_dynamics.solvers.base import SolverParameters, SolverStatus
-from llm_search_dynamics.solvers.ortools_knapsack import (
+from combinatorial_search_dynamics.data.parquet import read_parquet, write_parquet
+from combinatorial_search_dynamics.data.reference_validation import validate_references
+from combinatorial_search_dynamics.data.references import reference_row
+from combinatorial_search_dynamics.data.schemas import SCHEMA_VERSION, get_schema
+from combinatorial_search_dynamics.identifiers import canonical_json, instance_id
+from combinatorial_search_dynamics.solvers.base import SolverParameters, SolverStatus
+from combinatorial_search_dynamics.solvers.ortools_knapsack import (
     OrtoolsKnapsackSolver,
     limit_reached,
     mapped_status,
     relative_maximization_gap,
 )
-from llm_search_dynamics.solvers.registry import get_solver
-from llm_search_dynamics.tasks.dummy_binary import DummyBinaryTask
-from llm_search_dynamics.tasks.knapsack import KnapsackInstance, KnapsackTask
-from llm_search_dynamics.tasks.registry import get_task
+from combinatorial_search_dynamics.solvers.registry import get_solver
+from combinatorial_search_dynamics.tasks.dummy_binary import DummyBinaryTask
+from combinatorial_search_dynamics.tasks.knapsack import KnapsackInstance, KnapsackTask
+from combinatorial_search_dynamics.tasks.registry import get_task
 
 
 def task() -> KnapsackTask:

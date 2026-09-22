@@ -6,10 +6,10 @@ from pathlib import Path
 import numpy as np
 import pyarrow as pa
 
-from llm_search_dynamics.data.parquet import write_parquet
-from llm_search_dynamics.data.schemas import get_schema
-from llm_search_dynamics.data.zarr import ObservationArray, write_observation_store
-from llm_search_dynamics.identifiers import checkpoint_id, instance_id, trial_id
+from combinatorial_search_dynamics.data.parquet import write_parquet
+from combinatorial_search_dynamics.data.schemas import get_schema
+from combinatorial_search_dynamics.data.zarr import ObservationArray, write_observation_store
+from combinatorial_search_dynamics.identifiers import checkpoint_id, instance_id, trial_id
 
 
 def make_tables() -> dict[str, pa.Table]:

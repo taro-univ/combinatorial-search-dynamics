@@ -1,9 +1,9 @@
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from llm_search_dynamics.data.parquet import write_parquet
-from llm_search_dynamics.data.validation import validate_dataset
-from llm_search_dynamics.data.zarr import write_observation_store
+from combinatorial_search_dynamics.data.parquet import write_parquet
+from combinatorial_search_dynamics.data.validation import validate_dataset
+from combinatorial_search_dynamics.data.zarr import write_observation_store
 from tests.helpers import make_observations, make_tables, write_dataset
 
 

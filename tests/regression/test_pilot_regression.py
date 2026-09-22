@@ -9,9 +9,9 @@ from pathlib import Path
 import pyarrow.parquet as pq
 import pytest
 
-from llm_search_dynamics.config import resolved_config
-from llm_search_dynamics.data.splits import read_split
-from llm_search_dynamics.pipeline.stages import PilotPaths, reproduce_pilot
+from combinatorial_search_dynamics.config import resolved_config
+from combinatorial_search_dynamics.data.splits import read_split
+from combinatorial_search_dynamics.pipeline.stages import PilotPaths, reproduce_pilot
 
 
 def test_default_seed_state_transition_metric_and_report_shape(tmp_path: Path) -> None:

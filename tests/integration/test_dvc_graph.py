@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import yaml
 
-from llm_search_dynamics.config import repository_root
+from combinatorial_search_dynamics.config import repository_root
 
 
 def test_dvc_graph_is_local_acyclic_and_stage_complete() -> None:
@@ -26,7 +26,7 @@ def test_dvc_graph_is_local_acyclic_and_stage_complete() -> None:
     assert len(output_owner) == sum(len(spec["outs"]) for spec in stages.values())
     seen = set()
     for stage, spec in stages.items():
-        assert spec["cmd"].startswith("uv run lsd ")
+        assert spec["cmd"].startswith("uv run csd ")
         assert spec["deps"] and spec["outs"]
         assert any(dep.startswith("configs/") for dep in spec["deps"]) or stage in {
             "prepare_trajectories",

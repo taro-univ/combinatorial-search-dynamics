@@ -98,9 +98,9 @@ raw軌跡は上書きしない。特徴量、各単体モデル、選択履歴�
 ## 再現手順
 
 ```bash
-uv run lsd reproduce-pilot
-uv run lsd validate-data --data-dir data/raw/knapsack_pilot
+uv run csd reproduce-pilot
+uv run csd validate-data --data-dir data/raw/knapsack_pilot
 uv run dvc repro
 ```
 
-特徴分析だけの再生成は`uv run lsd analyze-success --force`を使う。主要結果は`artifacts/knapsack_pilot/success_feature_comparison.md`、全選択履歴は`success_feature_selection.json`、問題選定用の量は`data/derived/knapsack_pilot/instance_features.parquet`で確認する。
+特徴分析だけの再生成は`uv run csd analyze-success --force`を使う。主要結果は`artifacts/knapsack_pilot/success_feature_comparison.md`、全選択履歴は`success_feature_selection.json`、問題選定用の量は`data/derived/knapsack_pilot/instance_features.parquet`で確認する。

@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from llm_search_dynamics.search.algorithms import (
+from combinatorial_search_dynamics.search.algorithms import (
     RandomizedFirstImprovement,
     ShortTermTabuSearch,
     SimulatedAnnealing,
 )
-from llm_search_dynamics.search.base import BudgetedEvaluator
-from llm_search_dynamics.tasks.dummy_binary import BinaryInstance, DummyBinaryTask
+from combinatorial_search_dynamics.search.base import BudgetedEvaluator
+from combinatorial_search_dynamics.tasks.dummy_binary import BinaryInstance, DummyBinaryTask
 
 
 @pytest.mark.parametrize(

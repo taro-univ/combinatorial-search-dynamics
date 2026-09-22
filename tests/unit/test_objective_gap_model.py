@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from llm_search_dynamics.state_models.objective_gap import ObjectiveGapStateModel
-from llm_search_dynamics.state_models.registry import get_state_model, load_state_model
+from combinatorial_search_dynamics.state_models.objective_gap import ObjectiveGapStateModel
+from combinatorial_search_dynamics.state_models.registry import get_state_model, load_state_model
 
 
 def _rows(*gaps: float | None, identifier: str = "ins_train") -> list[dict]:

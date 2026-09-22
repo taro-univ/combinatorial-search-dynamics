@@ -1,6 +1,6 @@
 import pytest
 
-from llm_search_dynamics.data.duckdb import MissingParquetError, create_analysis_views
+from combinatorial_search_dynamics.data.duckdb import MissingParquetError, create_analysis_views
 from tests.helpers import write_dataset
 
 

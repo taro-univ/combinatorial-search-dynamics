@@ -375,6 +375,44 @@ wheels = [
 ]
 
 [[package]]
+name = "combinatorial-search-dynamics"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "duckdb" },
+    { name = "dvc" },
+    { name = "hydra-core" },
+    { name = "mlflow" },
+    { name = "numpy" },
+    { name = "ortools" },
+    { name = "pyarrow" },
+    { name = "typer" },
+    { name = "zarr" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "duckdb", specifier = ">=1.0.0,<2.0.0" },
+    { name = "dvc", specifier = ">=3.0.0,<4.0.0" },
+    { name = "hydra-core", specifier = ">=1.3.2" },
+    { name = "mlflow", specifier = ">=3.0.0,<4.0.0" },
+    { name = "numpy", specifier = ">=1.26.0,<3.0.0" },
+    { name = "ortools", specifier = ">=9.15.0,<9.16.0" },
+    { name = "pyarrow", specifier = ">=17.0.0,<26.0.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.5.0" },
+    { name = "typer", specifier = ">=0.12.3" },
+    { name = "zarr", specifier = ">=3.1.0,<4.0.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
 name = "configobj"
 version = "5.0.9"
 source = { registry = "https://pypi.org/simple" }
@@ -1173,44 +1211,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/b6/a5/607e533ed6c83ae1a
 wheels = [
     { url = "https://files.pythonhosted.org/packages/fb/0f/834427d8c03ff1d7e867d3db3d176470c64871753252b21b4f4897d1fa45/kombu-5.6.2-py3-none-any.whl", hash = "sha256:efcfc559da324d41d61ca311b0c64965ea35b4c55cc04ee36e55386145dace93", size = 214219, upload-time = "2025-12-29T20:30:05.74Z" },
 ]
-
-[[package]]
-name = "llm-search-dynamics"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "duckdb" },
-    { name = "dvc" },
-    { name = "hydra-core" },
-    { name = "mlflow" },
-    { name = "numpy" },
-    { name = "ortools" },
-    { name = "pyarrow" },
-    { name = "typer" },
-    { name = "zarr" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "duckdb", specifier = ">=1.0.0,<2.0.0" },
-    { name = "dvc", specifier = ">=3.0.0,<4.0.0" },
-    { name = "hydra-core", specifier = ">=1.3.2" },
-    { name = "mlflow", specifier = ">=3.0.0,<4.0.0" },
-    { name = "numpy", specifier = ">=1.26.0,<3.0.0" },
-    { name = "ortools", specifier = ">=9.15.0,<9.16.0" },
-    { name = "pyarrow", specifier = ">=17.0.0,<26.0.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.5.0" },
-    { name = "typer", specifier = ">=0.12.3" },
-    { name = "zarr", specifier = ">=3.1.0,<4.0.0" },
-]
-provides-extras = ["dev"]
 
 [[package]]
 name = "mako"

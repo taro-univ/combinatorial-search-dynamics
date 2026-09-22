@@ -2,8 +2,8 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
-from llm_search_dynamics.data.parquet import read_parquet, write_parquet
-from llm_search_dynamics.data.schemas import (
+from combinatorial_search_dynamics.data.parquet import read_parquet, write_parquet
+from combinatorial_search_dynamics.data.schemas import (
     TABLE_NAMES,
     SchemaValidationError,
     UnsupportedSchemaVersionError,
@@ -58,7 +58,7 @@ def test_version_mismatch_is_rejected_on_read(tmp_path) -> None:
 def test_schema_v1_can_be_read_but_not_written(tmp_path) -> None:
     current = make_tables()["instances"]
     rows = [{**row, "schema_version": "1"} for row in current.to_pylist()]
-    from llm_search_dynamics.data.schemas import get_schema
+    from combinatorial_search_dynamics.data.schemas import get_schema
 
     legacy = pa.Table.from_pylist(rows, schema=get_schema("instances", "1"))
     path = tmp_path / "legacy.parquet"

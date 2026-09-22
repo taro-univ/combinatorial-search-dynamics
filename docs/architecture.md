@@ -4,7 +4,7 @@ Phase 0のPython 3.11/src layout、uv、Hydra、CLI、CI、Phase 1の保存・�
 
 `configs/config.yaml`が設定合成の入口であり、experiment、task、solver、search_method、search、observation、state_model、dynamics、evaluation、storage、trackingを分類する。storageはrepository-relativeなraw、interim、derived、artifact、Parquet、Zarr pathを定義し、trackingはlocal file URIを定義する。
 
-`src/llm_search_dynamics/config.py`はHydra設定の合成・解決・構成検証を担う。CLIは`lsd doctor`、`lsd validate-repository`、Phase 1データ検証の`lsd validate-data`とPhase 2のstage commandを公開する。末尾のHydra overrideを各stageへ渡す。
+`src/combinatorial_search_dynamics/config.py`はHydra設定の合成・解決・構成検証を担う。CLIは`csd doctor`、`csd validate-repository`、Phase 1データ検証の`csd validate-data`とPhase 2のstage commandを公開する。末尾のHydra overrideを各stageへ渡す。
 
 `identifiers.py`はcanonical JSONとSHA-256によるID生成を一元化する。`data/schemas.py`のPyArrow schema version 2が新規書込みの正本で、version 1は読取り互換のみである。`data/zarr.py`も新規には`budget_used` indexを書き、version 1の`generated_token_index`を読み込める。
 

@@ -1,11 +1,11 @@
-# LLM Search Dynamics リポジトリ仕様書
+# Combinatorial Search Dynamics リポジトリ仕様書
 
 | 項目 | 内容 |
 |---|---|
 | 文書状態 | 初期構築仕様 |
 | 文書版 | 0.1.0 |
-| 想定リポジトリ名 | `llm-search-dynamics` |
-| Pythonパッケージ名 | `llm_search_dynamics` |
+| 想定リポジトリ名 | `combinatorial-search-dynamics` |
+| Pythonパッケージ名 | `combinatorial_search_dynamics` |
 | 想定Python | 3.11 |
 | 対象 | M1後期の研究実験・解析基盤 |
 
@@ -81,7 +81,7 @@ ParquetとZarrの対応を行番号や保存順に依存させない。すべて
 ## 4. リポジトリ構成
 
 ```text
-llm-search-dynamics/
+combinatorial-search-dynamics/
 ├── README.md
 ├── pyproject.toml
 ├── uv.lock
@@ -104,7 +104,7 @@ llm-search-dynamics/
 │   ├── storage/
 │   └── search_space/
 ├── src/
-│   └── llm_search_dynamics/
+│   └── combinatorial_search_dynamics/
 │       ├── __init__.py
 │       ├── cli.py
 │       ├── config.py
@@ -582,18 +582,18 @@ DVC remoteは初期構築の必須条件としない。ただし、本実験開�
 利用者向けの操作を以下へ統一する。
 
 ```text
-lsd generate-instances
-lsd solve-references
-lsd collect
-lsd prepare
-lsd extract
-lsd split
-lsd tune
-lsd fit
-lsd evaluate
-lsd report
-lsd validate-data
-lsd reproduce-pilot
+csd generate-instances
+csd solve-references
+csd collect
+csd prepare
+csd extract
+csd split
+csd tune
+csd fit
+csd evaluate
+csd report
+csd validate-data
+csd reproduce-pilot
 ```
 
 各コマンドは以下を満たす。
@@ -853,8 +853,8 @@ DVC metafileはGit管理し、実データはDVC cache/remoteで管理する。
 
 | 項目 | 既定値 |
 |---|---|
-| リポジトリ名 | `llm-search-dynamics` |
-| package | `llm_search_dynamics` |
+| リポジトリ名 | `combinatorial-search-dynamics` |
+| package | `combinatorial_search_dynamics` |
 | Python | 3.11 |
 | layout | `src` layout |
 | 公開範囲 | private |

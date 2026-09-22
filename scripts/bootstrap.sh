@@ -25,5 +25,5 @@ echo "Synchronizing the locked Python 3.11 environment..."
 uv sync --all-extras --locked
 
 echo "Setup complete. Next steps:"
-echo "  uv run lsd doctor"
-echo "  uv run lsd validate-repository"
+echo "  uv run csd doctor"
+echo "  uv run csd validate-repository"

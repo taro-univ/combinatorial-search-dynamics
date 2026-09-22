@@ -9,10 +9,10 @@ from pathlib import Path
 import pyarrow.parquet as pq
 import pytest
 
-from llm_search_dynamics.config import resolved_config
-from llm_search_dynamics.data.schemas import get_schema
-from llm_search_dynamics.data.splits import read_split
-from llm_search_dynamics.pipeline.stages import PilotPaths, reproduce_pilot
+from combinatorial_search_dynamics.config import resolved_config
+from combinatorial_search_dynamics.data.schemas import get_schema
+from combinatorial_search_dynamics.data.splits import read_split
+from combinatorial_search_dynamics.pipeline.stages import PilotPaths, reproduce_pilot
 from tests.integration.test_knapsack_pipeline import knapsack_overrides
 
 

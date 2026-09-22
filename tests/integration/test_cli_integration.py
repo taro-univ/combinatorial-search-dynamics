@@ -1,6 +1,6 @@
 from typer.testing import CliRunner
 
-from llm_search_dynamics.cli import app
+from combinatorial_search_dynamics.cli import app
 
 
 def test_validate_repository_needs_no_external_services() -> None:
