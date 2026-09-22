@@ -126,3 +126,7 @@ Codex CLIはリポジトリ開発を補助する外部ツールであり、研�
 全体仕様とPhase 4以降の計画は[リポジトリ仕様書](docs/repository-specification.md)を参照してください。
 
 Gitはコード・Hydra設定・文書・`dvc.yaml`/`dvc.lock`を管理します。DVCは生成データcacheと依存関係、MLflowはlocal runを管理し、Hydraが科学条件の正本です。`data/`、`artifacts/`、`mlruns/`、`.dvc/cache/`はGit管理対象外であり、remoteやcredentialは設定しません。Phase 2のsnapshotは`data/raw/pilot/`、Phase 3は`data/raw/knapsack_pilot/`に置き、それぞれ同名のinterim/derived/artifact directoryを使用します。
+
+## ライセンス
+
+このリポジトリは[BSD 3-Clause License](LICENSE)で公開します。
