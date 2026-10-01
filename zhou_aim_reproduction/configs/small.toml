@@ -1,0 +1,53 @@
+[experiment]
+name = "small"
+instance_seeds = [11, 29, 47]
+run_seeds = [101, 202, 303]
+sizes = [12, 32, 64]
+
+[model]
+kind = "cim"
+n = 64
+j_scale = 1.0
+xi = 1.0
+boundary = 1.0
+project_after_step = true
+
+[integration]
+dt = 0.02
+steps = 2000
+record_stride = 10
+initialization = "gaussian"
+initial_std = 0.1
+flip_window_steps = 10
+kde_bandwidth_factor = 1.0
+p0_bin_width = 0.1
+
+[temperature_schedule]
+kind = "temperature"
+a_start = 2.0
+a_end = 2.0
+t_start = 1.0
+t_end = 0.01
+
+[gain_schedule]
+kind = "gain"
+a_start = -2.0
+a_end = 2.0
+t_start = 0.01
+t_end = 0.01
+
+[fixed_schedule]
+kind = "fixed"
+a_start = 0.0
+a_end = 0.0
+t_start = 1e-5
+t_end = 1e-5
+
+[phase_map]
+n = 48
+a_values = [-2.0, -1.0, 0.0, 1.0, 2.0]
+t_values = [0.01, 0.05, 0.2, 0.5, 1.0]
+burn_steps = 600
+sample_steps = 600
+seeds = [5, 17, 31]
+

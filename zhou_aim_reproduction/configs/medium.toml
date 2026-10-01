@@ -1,0 +1,53 @@
+[experiment]
+name = "medium"
+instance_seeds = [11, 29, 47, 71, 101]
+run_seeds = [101, 202, 303, 404, 505]
+sizes = [64, 128, 256, 512]
+
+[model]
+kind = "cim"
+n = 256
+j_scale = 1.0
+xi = 1.0
+boundary = 1.0
+project_after_step = true
+
+[integration]
+dt = 0.02
+steps = 10000
+record_stride = 25
+initialization = "gaussian"
+initial_std = 0.1
+flip_window_steps = 25
+kde_bandwidth_factor = 1.0
+p0_bin_width = 0.08
+
+[temperature_schedule]
+kind = "temperature"
+a_start = 2.0
+a_end = 2.0
+t_start = 2.0
+t_end = 0.01
+
+[gain_schedule]
+kind = "gain"
+a_start = -2.0
+a_end = 2.0
+t_start = 0.01
+t_end = 0.01
+
+[fixed_schedule]
+kind = "fixed"
+a_start = 0.0
+a_end = 0.0
+t_start = 1e-5
+t_end = 1e-5
+
+[phase_map]
+n = 128
+a_values = [-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0]
+t_values = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0]
+burn_steps = 2500
+sample_steps = 2500
+seeds = [5, 17, 31, 43, 59]
+

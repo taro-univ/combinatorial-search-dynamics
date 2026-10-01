@@ -1,0 +1,52 @@
+[experiment]
+name = "full"
+instance_seeds = [11, 29, 47, 71, 101, 131, 173, 211]
+run_seeds = [101, 202, 303, 404, 505, 606, 707, 808]
+sizes = [250, 500, 750, 1000, 2000]
+
+[model]
+kind = "cim"
+n = 2000
+j_scale = 1.0
+xi = 1.0
+boundary = 1.0
+project_after_step = true
+
+[integration]
+dt = 0.02
+steps = 1000000
+record_stride = 1000
+initialization = "gaussian"
+initial_std = 0.1
+flip_window_steps = 1000
+kde_bandwidth_factor = 1.0
+p0_bin_width = 0.05
+
+[temperature_schedule]
+kind = "temperature"
+a_start = 2.0
+a_end = 2.0
+t_start = 2.0
+t_end = 0.01
+
+[gain_schedule]
+kind = "gain"
+a_start = -2.0
+a_end = 2.0
+t_start = 0.01
+t_end = 0.01
+
+[fixed_schedule]
+kind = "fixed"
+a_start = 0.0
+a_end = 0.0
+t_start = 1e-5
+t_end = 1e-5
+
+[phase_map]
+n = 500
+a_values = [-2.0, -1.75, -1.5, -1.25, -1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
+t_values = [0.01, 0.015, 0.025, 0.04, 0.065, 0.1, 0.16, 0.25, 0.4, 0.65, 1.0]
+burn_steps = 20000
+sample_steps = 20000
+seeds = [5, 17, 31, 43, 59, 73, 89, 103]

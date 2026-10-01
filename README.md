@@ -2,6 +2,10 @@
 
 組合せ最適化の探索を記録・解析する研究基盤です。0-1ナップサックをOR-Tools CP-SATで参照計算し、古典探索の軌跡を収集する小規模CPU pilotを実行できます。外部API、LLM、GPU、DVC remote、MLflow serverは不要です。
 
+## 現在の研究セッション
+
+SK模型上のAnalog Ising Machine（AIM）について、Zhouらの有限時間ダイナミクス、temperature/gain annealing、探索凍結の診断を再現する独立実験を `zhou_aim_reproduction/` に整備しています。一次資料との式対応、実行条件、再現結果は同ディレクトリのREADMEと `docs/` に記録します。
+
 ## セットアップ
 
 Pythonは3.11を使用します。uvを導入済みなら、lock済みの全依存を次で同期できます。
