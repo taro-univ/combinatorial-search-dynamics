@@ -4,6 +4,8 @@ Zhouらの2論文を一次資料として、Sherrington–Kirkpatrick模型上�
 
 数式と論文中の式・図の対応は [`docs/equation_map.md`](docs/equation_map.md)、実測結果と未再現事項は [`docs/reproduction_report.md`](docs/reproduction_report.md) に記録します。
 
+digCIMの不一致診断は、81試行と厳密列挙対照を含みます。N=2000・a=−1の冷却対照は平均energy −0.7538となり、固定低温の−0.6855から改善しました。`compare_steady_energy_by_gain.py` の「steady」は後半の時間平均を指し、平衡到達を保証しません。profile名が `full` でも、このscriptのstep数は `--burn-steps` と `--sample-steps` で決まります。
+
 ## セットアップ
 
 リポジトリrootで次を実行します。独立したsubprojectなので、既存のナップサック実験環境を変更しません。
@@ -41,6 +43,16 @@ UV_CACHE_DIR=/tmp/zhou-aim-uv uv run --project zhou_aim_reproduction \
 UV_CACHE_DIR=/tmp/zhou-aim-uv uv run --project zhou_aim_reproduction \
   python zhou_aim_reproduction/scripts/run_validation.py --profile small
 ```
+
+digCIMの不一致を切り分ける実験は次で実行します。81試行と16スピン系の厳密列挙対照を行い、時間刻みは物理時間を固定し、共通のBrownian増分を使って比較します。固定低温と、高温から線形冷却して最後の20%を低温で保持する条件を、同じinstance・初期値・noiseで比較します。N=2000を含むCPU実験なので数分以上かかります。
+
+```bash
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
+  uv run --project zhou_aim_reproduction \
+  python zhou_aim_reproduction/scripts/diagnose_digcim.py
+```
+
+出力は `results/digcim_diagnosis/<run-id>/` の `runs.csv`、`summary.csv`、`manifest.json`、各試行のtrajectory、`figures/diagnosis.png` です。既定のサイズ比較は各Nにつき1個のinstance・3初期seedを用いる予備検証です。disorder平均を精密に評価する場合は `--instance-seeds 11 29 47 ...` でinstanceを増やします。有限サイズの参照線はensembleの基底energyの近似であり、特定instanceの厳密最適値ではありません。
 
 単体テストは次です。
 
@@ -113,4 +125,3 @@ docs/equation_map.md        equations, normalization, assumptions
 docs/reproduction_report.md reproduced claims and limitations
 results/                    generated run directories (Git ignored by root policy)
 ```
-

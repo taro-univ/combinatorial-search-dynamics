@@ -85,6 +85,19 @@ digCIMはsoft amplitudeではなく符号を相互作用へ渡す:
 
 有限時間論文 Appendix F Eq. (F1) と相解析論文の “Digitization” 節に対応する。CIMの cubic saturation \(-x_i^3\) はなく、相互作用は \(x_j\) ではなく \(\operatorname{sgn}x_j\) である。有限時間論文 Eq. (F1) は自己項に \(a\phi(x_i)\) を書き、相解析論文本文は bounded variable に対して \(ax_i\) と書く。本実装は両者が一致する範囲を明確にするため、各Euler step後にも `[-B,B]` へ射影する方式を設定で切り替え可能にする。
 
+### 静止状態と基底状態の区別（2026-10-02）
+
+射影あり・ノイズなし・\(a<0\) のdigCIMでは、\(h_i=\xi\sum_jJ_{ij}\sigma_j\) とすると静止状態は
+
+\[
+x_i=\phi_B\!\left(\frac{h_i}{|a|}\right),\qquad
+\sigma_i=\operatorname{sgn}(h_i)
+\]
+
+を満たす。これは \(\sigma_i h_i\ge0\)、すなわち1スピン反転でenergyが下がらない条件を与える。しかし、複数スピンを変えるとenergyが下がる局所解も含まれるので、静止状態を基底状態と同一視してはいけない。相解析論文の静的な基底energy曲線を、任意の初期値からの有限時間計算の保証としては使わない。厳密列挙による反例は `reproduction_report.md` に記録した。
+
+\(a>0\) では、境界 \(x_i=B\sigma_i\) で \(aB+\sigma_i h_i\ge0\) なら射影後に静止できる。したがって、自己増幅によって \(\sigma_i h_i<0\) のスピンまで固定される場合がある。正gainでの劣化の説明として、実測の不安定スピン比率と併せて扱う。
+
 ## 分布、相関、応答
 
 時刻 \(t\) の瞬時soft-spin分布は

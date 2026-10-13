@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import replace
+from dataclasses import asdict, replace
 
 import numpy as np
 import pandas as pd
@@ -44,6 +44,7 @@ def main() -> None:
     figure_dir = run_dir / "figures"
     figure_dir.mkdir()
     rows: list[dict[str, float | int | str]] = []
+    resolved_configs = {}
     instance_seeds = profile["experiment"]["instance_seeds"][: args.instance_limit]
     run_seeds = profile["experiment"]["run_seeds"][: args.run_limit]
     reference_energy = finite_size_ground_energy_mean(n)
@@ -62,6 +63,7 @@ def main() -> None:
                         steps=total_steps,
                         record_stride=args.record_stride,
                     )
+                    resolved_configs[model_kind] = asdict(config)
                     result = simulate(
                         instance,
                         schedule,
@@ -83,6 +85,16 @@ def main() -> None:
                             "instance_seed": int(instance_seed),
                             "run_seed": int(run_seed),
                             "n": n,
+                            "dt": dt,
+                            "physical_duration": total_steps * dt,
+                            "tail_flips_per_spin": float(
+                                result.cumulative_flips[-1]
+                                - result.cumulative_flips[steady_mask][0]
+                            )
+                            / n,
+                            "tail_endpoint_overlap": float(
+                                np.mean(result.spins[steady_mask][0] * result.spins[-1])
+                            ),
                         }
                     )
 
@@ -117,9 +129,12 @@ def main() -> None:
             color=colors[model_kind],
             alpha=0.18,
         )
-    ax.axhline(reference_energy, color="0.4", linestyle="--", label="finite-size reference")
-    ax.set(xlabel="gain a", ylabel="steady decoded energy density")
-    ax.set_title(f"CIM vs digCIM at T={args.temperature:g}, N={n}")
+    ax.axhline(reference_energy, color="0.4", linestyle="--", label="finite-size mean reference")
+    ax.set(xlabel="gain a", ylabel="finite-time tail decoded energy density")
+    ax.set_title(
+        f"CIM vs digCIM: fixed T={args.temperature:g}, N={n}\n"
+        f"dt={dt:g}, physical time={total_steps * dt:g}"
+    )
     ax.legend()
     fig.savefig(figure_dir / "steady_energy_by_gain.png", dpi=170, bbox_inches="tight")
     plt.close(fig)
@@ -135,7 +150,12 @@ def main() -> None:
         "instance_seeds": instance_seeds,
         "run_seeds": run_seeds,
         "run_count": len(runs),
+        "resolved_simulation_configs": resolved_configs,
+        "physical_duration": total_steps * dt,
+        "temperature_protocol": "fixed low temperature from initialization; no annealing",
         "steady_energy_definition": "mean decoded energy over records after burn_steps",
+        "equilibrium_claim": False,
+        "uncertainty": "approximate normal CI over runs; conditional on sampled instances",
     }
     save_manifest(run_dir, profile, details)
     print_summary({"run_dir": str(run_dir), **details})

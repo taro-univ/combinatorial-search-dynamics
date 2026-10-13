@@ -6,6 +6,8 @@
 
 SK模型上のAnalog Ising Machine（AIM）について、Zhouらの有限時間ダイナミクス、temperature/gain annealing、探索凍結の診断を再現する独立実験を `zhou_aim_reproduction/` に整備しています。一次資料との式対応、実行条件、再現結果は同ディレクトリのREADMEと `docs/` に記録します。
 
+digCIMの診断スクリプト [`diagnose_digcim.py`](zhou_aim_reproduction/scripts/diagnose_digcim.py) は、系のサイズ、時間刻み、積分時間、冷却条件を比較し、小規模系の厳密列挙で対照を取ります。既定条件の81診断試行では固定低温での探索凍結を確認し、N=2000・a=−1では冷却により平均energyが−0.6855から−0.7538に改善しました。比較条件と結果は [`検証結果`](zhou_aim_reproduction/docs/reproduction_report.md) に記録しています。
+
 ## セットアップ
 
 Pythonは3.11を使用します。uvを導入済みなら、lock済みの全依存を次で同期できます。
